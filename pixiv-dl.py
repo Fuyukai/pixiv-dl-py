@@ -28,9 +28,19 @@ class DownloadableImage:
 
 
 class Downloader(object):
-    def __init__(self, aapi: pixivpy3.AppPixivAPI, papi: pixivpy3.PixivAPI):
+    def __init__(self, aapi: pixivpy3.AppPixivAPI, papi: pixivpy3.PixivAPI,
+                 *, allow_r18: bool = False):
+        """
+        :param aapi: The Pixiv app API interface.
+        :param papi: The Pixiv Public API interface.
+
+        Behaviour params:
+        :param allow_r18: If R-18 content should be downloaded, too.
+        """
         self.aapi = aapi
         self.papi = papi
+
+        self.allow_r18 = allow_r18
 
     def download_page(self, raw_dir: Path, items: List[DownloadableImage]):
         """
@@ -142,6 +152,11 @@ class Downloader(object):
 
         # begin processing
         for illust in to_process:
+            # R-18 tag
+            if illust['x_restrict'] and not self.allow_r18:
+                print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
+                continue
+
             self.store_illust_metadata(output_dir, illust)
             obs = self.make_downloadable(illust)
             to_dl.append(obs)
@@ -166,6 +181,8 @@ def main():
     parser.add_argument("PASSWORD", help="Your pixiv password")
     parser.add_argument("-o", "--output", help="The output directory for the command to run",
                         default="./output")
+    parser.add_argument("--allow-r18", action="store_true",
+                        help="If R-18 works should also be downloaded")
 
     parsers = parser.add_subparsers(dest="subcommand")
 
@@ -189,13 +206,15 @@ def main():
     print("Authenticating with Pixiv...")
     aapi.auth(username=args.USERNAME, password=args.PASSWORD)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
-    dl = Downloader(aapi, public_api)
+    dl = Downloader(aapi, public_api, allow_r18=args.allow_r18)
     print(f"Successfully logged in as {aapi.user_id}")
 
     subcommand = args.subcommand
     if subcommand == "bookmarks":
         print("Downloading all bookmarks...")
         return dl.download_bookmarks(Path(args.output))
+    elif subcommand == "following":
+        print("Downloading your following...")
     else:
         print(f"Unknown command {subcommand}")
 
