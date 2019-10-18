@@ -388,6 +388,10 @@ class Downloader(object):
             to_process = self.depaginate_download(
                 fn, max_items=30, param_name="offset", initial_param=x,
             )
+            # no more to DL
+            if len(to_process) == 0:
+                return
+
             to_dl = self.process_and_save_illusts(raw, to_process)
 
             print("Downloading images concurrently...")
