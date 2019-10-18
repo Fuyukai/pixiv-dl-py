@@ -146,7 +146,10 @@ class Downloader(object):
 
     @staticmethod
     def depaginate_download(
-        meth, param_name: str = "last_bookmark_id", search_name: str = None, max_items: int = None,
+        meth,
+        param_name: str = "last_bookmark_id",
+        search_name: str = None,
+        max_items: int = None,
         initial_param: Any = None,
     ):
         """
@@ -386,7 +389,7 @@ class Downloader(object):
 
             fn = partial(self.aapi.illust_follow)
             to_process = self.depaginate_download(
-                fn, max_items=30, param_name="offset", initial_param=x,
+                fn, max_items=30, param_name="offset", initial_param=x
             )
             # no more to DL
             if len(to_process) == 0:
@@ -434,8 +437,7 @@ def main():
     # download all following
     following_mode = parsers.add_parser("following", help="Download all following")
     following_mode.add_argument(
-        "-l", "--limit", default=500, help="The maximum number of items to download",
-        type=int,
+        "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
 
     # mirror mode
