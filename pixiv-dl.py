@@ -212,6 +212,14 @@ class Downloader(object):
 
                 continue
 
+            # R-18 tag
+            if illust["x_restrict"] and not self.allow_r18:
+                if not silent:
+                    msg = f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
+                    print(msg)
+
+                continue
+
             # granular sfw checks
             if lewd_level < self.lewd_limits[0]:
                 if not silent:
@@ -229,14 +237,6 @@ class Downloader(object):
                         f"Skipping illustation {id} ({title}): "
                         f"lewd level of {lewd_level} is above limit"
                     )
-                    print(msg)
-
-                continue
-
-            # R-18 tag
-            if illust["x_restrict"] and not self.allow_r18:
-                if not silent:
-                    msg = f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
                     print(msg)
 
                 continue
