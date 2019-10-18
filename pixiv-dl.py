@@ -297,8 +297,8 @@ def main():
         This can download your bookmarks, your following feed, whole user accounts, etc.
         """)
     )
-    parser.add_argument("USERNAME", help="Your pixiv username")
-    parser.add_argument("PASSWORD", help="Your pixiv password")
+    parser.add_argument("-u", "--username", help="Your pixiv username", required=True)
+    parser.add_argument("-p", "--password", help="Your pixiv password", required=True)
     parser.add_argument("-o", "--output", help="The output directory for the command to run",
                         default="./output")
     parser.add_argument("--allow-r18", action="store_true",
@@ -330,7 +330,7 @@ def main():
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
     print("Authenticating with Pixiv...")
-    aapi.auth(username=args.USERNAME, password=args.PASSWORD)
+    aapi.auth(username=args.username, password=args.password)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
     dl = Downloader(aapi, public_api, allow_r18=args.allow_r18,
                     lewd_limits=(args.min_lewd_level, args.max_lewd_level))
