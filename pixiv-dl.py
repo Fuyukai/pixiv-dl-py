@@ -308,6 +308,8 @@ def main():
     print(f"Successfully logged in as {aapi.user_id}")
 
     output = Path(args.output)
+    output.mkdir(exist_ok=True)
+
     subcommand = args.subcommand
     if subcommand == "bookmarks":
         print("Downloading all bookmarks...")
