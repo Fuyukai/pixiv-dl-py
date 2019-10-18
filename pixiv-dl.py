@@ -10,8 +10,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from pprint import pprint
-from typing import List, Tuple
+from typing import List, Set
 
 import arrow
 import pixivpy3
@@ -42,7 +41,8 @@ class Downloader(object):
         *,
         allow_r18: bool = False,
         lewd_limits=(0, 6),
-
+        filter_tags: Set[str] = None,
+        required_tags: Set[str] = None,
     ):
         """
         :param aapi: The Pixiv app API interface.
@@ -51,6 +51,8 @@ class Downloader(object):
         Behaviour params:
         :param allow_r18: If R-18 content should be downloaded, too.
         :param lewd_limits: The 'lewd level' limits. 2 = sfw, 4 = moderately nsfw, 6 = super nsfw.
+        :param filter_tags: If an illustration has any of these tags, it will be ignored.
+        :param required_tags: If an illustration doesn't have any of these tags, it will be ignored.
 
         .. note::
 
@@ -62,6 +64,9 @@ class Downloader(object):
 
         self.allow_r18 = allow_r18
         self.lewd_limits = lewd_limits
+
+        self.filtered_tags = filter_tags
+        self.required_tags = required_tags
 
     def download_page(self, raw_dir: Path, items: List[DownloadableImage]):
         """
@@ -125,10 +130,7 @@ class Downloader(object):
         """
         Stores the metadata for a specified illustration.
         """
-        illust["_meta"] = {
-            "download-date": arrow.utcnow().isoformat(),
-            "tool": "pixiv-dl",
-        }
+        illust["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
 
         illust_id = illust["id"]
         # the actual location
@@ -139,9 +141,7 @@ class Downloader(object):
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
     @staticmethod
-    def depaginate_download(
-        meth, param_name: str = "last_bookmark_id", search_name: str = None
-    ):
+    def depaginate_download(meth, param_name: str = "last_bookmark_id", search_name: str = None):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
@@ -154,9 +154,7 @@ class Downloader(object):
         last_id = None
         to_process = []
 
-        for x in range(
-            0, 999
-        ):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
+        for x in range(0, 999):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
             # page = x + 1
             if last_id is None:
                 print("Downloading initial illustrations page...")
@@ -194,39 +192,70 @@ class Downloader(object):
             id = illust["id"]
             title = illust["title"]
             lewd_level = illust["sanity_level"]
+
+            # visibility check
             if not illust["visible"]:
                 if not silent:
-                    print(
-                        f"Skipping illustration {id} because it is not marked as visible!"
-                    )
+                    msg = f"Skipping illustration {id} because it is not marked as visible!"
+                    print(msg)
 
                 continue
 
             # granular sfw checks
             if lewd_level < self.lewd_limits[0]:
                 if not silent:
-                    print(
+                    msg = (
                         f"Skipping illustation {id} ({title}): "
                         f"lewd level of {lewd_level} is below limit"
                     )
+                    print(msg)
 
                 continue
 
             if lewd_level > self.lewd_limits[1]:
                 if not silent:
-                    print(
+                    msg = (
                         f"Skipping illustation {id} ({title}): "
                         f"lewd level of {lewd_level} is above limit"
                     )
+                    print(msg)
 
                 continue
 
             # R-18 tag
             if illust["x_restrict"] and not self.allow_r18:
                 if not silent:
-                    print(
-                        f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
+                    msg = f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
+                    print(msg)
+
+                continue
+
+            # verify tags
+            tags = set()
+            for td in illust["tags"]:
+                tags.update(set(td.values()))
+
+            # note to self: self if check is to ensure that we don't do a tag filter if we don't
+            # need to.
+            filtered = tags.intersection(self.filtered_tags)
+            if self.filtered_tags and filtered:
+                if not silent:
+                    msg = (
+                        f"Skipping illustration {illust['id']} ({illust['title']}) "
+                        f"as it has filtered tags: {filtered}"
                     )
+                    print(msg)
+
+                continue
+
+            required = tags.intersection(self.required_tags)
+            if self.required_tags and not required:
+                if not silent:
+                    msg = (
+                        f"Skipping illustration {illust['id']} ({illust['title']}) "
+                        f"as it has none of the required tags: {self.required_tags}"
+                    )
+                    print(msg)
 
                 continue
 
@@ -283,10 +312,7 @@ class Downloader(object):
         self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
 
         print(f"Saving metadata...")
-        user_info["_meta"] = {
-            "download-date": arrow.utcnow().isoformat(),
-            "tool": "pixiv-dl",
-        }
+        user_info["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
         print(
@@ -330,21 +356,18 @@ def main():
     parser.add_argument("-u", "--username", help="Your pixiv username", required=True)
     parser.add_argument("-p", "--password", help="Your pixiv password", required=True)
     parser.add_argument(
-        "-o",
-        "--output",
-        help="The output directory for the command to run",
-        default="./output",
+        "-o", "--output", help="The output directory for the command to run", default="./output"
     )
     parser.add_argument(
-        "--allow-r18",
-        action="store_true",
-        help="If R-18 works should also be downloaded",
+        "--allow-r18", action="store_true", help="If R-18 works should also be downloaded"
+    )
+    parser.add_argument("--min-lewd-level", type=int, default=0, help="The minimum 'lewd level'")
+    parser.add_argument("--max-lewd-level", type=int, default=6, help="The maximum 'lewd level'")
+    parser.add_argument(
+        "--filter-tag", action="append", help="Ignore any illustrations with this tag"
     )
     parser.add_argument(
-        "--min-lewd-level", type=int, default=0, help="The minimum 'lewd level'"
-    )
-    parser.add_argument(
-        "--max-lewd-level", type=int, default=6, help="The maximum 'lewd level'"
+        "--require-tag", action="append", help="Require illustrations to have this tag"
     )
 
     parsers = parser.add_subparsers(dest="subcommand")
@@ -375,11 +398,19 @@ def main():
     print("Authenticating with Pixiv...")
     aapi.auth(username=args.username, password=args.password)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
+
+    if args.filter_tag is None:
+        args.filter_tag = []
+    if args.require_tag is None:
+        args.require_tag = []
+
     dl = Downloader(
         aapi,
         public_api,
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
+        filter_tags=set(args.filter_tag),
+        required_tags=set(args.require_tag),
     )
     print(f"Successfully logged in as {aapi.user_id}")
 
