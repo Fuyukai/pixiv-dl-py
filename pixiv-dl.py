@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from pprint import pprint
-from typing import List
+from typing import List, Tuple
 
 import arrow
 import pixivpy3
@@ -114,12 +114,9 @@ class Downloader(object):
             "tool": "pixiv-dl"
         }
 
-        raw = (output_dir / "raw")
-        raw.mkdir(exist_ok=True)
-
         illust_id = illust['id']
         # the actual location
-        subdir = (raw / str(illust_id))
+        subdir = (output_dir / str(illust_id))
         subdir.mkdir(exist_ok=True)
 
         # write the raw metadata for later usage, if needed
@@ -162,6 +159,36 @@ class Downloader(object):
 
         return to_process
 
+    def process_and_save_illusts(self, output_dir: Path,
+                                 illusts: List[dict],
+                                 silent: bool = False) -> List[List[DownloadableImage]]:
+        """
+        Processes and saves the list of illustrations.
+
+        This takes the list of illustration responses, saves them, and returns a list of
+        DownloadableImage to download.
+        """
+        to_dl = []
+
+        for illust in illusts:
+            # R-18 tag
+            # todo: make this more granular, with sanity_level...
+            if illust['x_restrict'] and not self.allow_r18:
+                if not silent:
+                    print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
+
+                continue
+
+            self.store_illust_metadata(output_dir, illust)
+            obs = self.make_downloadable(illust)
+            to_dl.append(obs)
+
+            if not silent:
+                print(f"Processed metadata for {illust['id']} ({illust['title']}) "
+                      f"with {len(obs)} pages")
+
+        return to_dl
+
     def download_bookmarks(self, output_dir: Path):
         """
         Downloads the bookmarks for this user.
@@ -173,21 +200,8 @@ class Downloader(object):
         fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
         to_process = self.depaginate_download(fn, param_name="max_bookmark_id")
         # downloadable objects, list of lists
-        to_dl = []
-
-        # begin processing
-        for illust in to_process:
-            # R-18 tag
-            if illust['x_restrict'] and not self.allow_r18:
-                print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
-                continue
-
-            self.store_illust_metadata(output_dir, illust)
-            obs = self.make_downloadable(illust)
-            to_dl.append(obs)
-            print(f"Processed metadata for {illust['title']} with {len(obs)} pages")
-
-        # free memory during the download process
+        to_dl = self.process_and_save_illusts(raw, to_process)
+        # free memory during the download process, we don't need these anymore
         to_process.clear()
 
         print("Downloading images concurrently...")
@@ -224,20 +238,11 @@ class Downloader(object):
 
         print(f"Downloading all works for user {user_id} || {user_info['user']['name']} "
               f"|| {user_info['user']['account']}")
+
+        # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
         to_process = self.depaginate_download(fn, param_name="offset")
-
-        to_dl = []
-        for illust in to_process:
-            # R-18 tag
-            if illust['x_restrict'] and not self.allow_r18:
-                print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
-                continue
-
-            self.store_illust_metadata(output_dir, illust)
-            obs = self.make_downloadable(illust)
-            to_dl.append(obs)
-            print(f"Processed metadata for {illust['title']} with {len(obs)} pages")
+        to_dl = self.process_and_save_illusts(raw, to_process)
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
