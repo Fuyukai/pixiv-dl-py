@@ -201,8 +201,10 @@ def main():
     args = parser.parse_args()
 
     public_api = pixivpy3.PixivAPI()
+    public_api.set_accept_language("en-us")
     # ew
     aapi = pixivpy3.AppPixivAPI()
+    aapi.set_accept_language("en-us")
     print("Authenticating with Pixiv...")
     aapi.auth(username=args.USERNAME, password=args.PASSWORD)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
