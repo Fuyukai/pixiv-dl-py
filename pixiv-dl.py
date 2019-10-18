@@ -36,18 +36,25 @@ class DownloadableImage:
 
 class Downloader(object):
     def __init__(self, aapi: pixivpy3.AppPixivAPI, papi: pixivpy3.PixivAPI,
-                 *, allow_r18: bool = False):
+                 *, allow_r18: bool = False, lewd_limits=(0, 6)):
         """
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
 
         Behaviour params:
         :param allow_r18: If R-18 content should be downloaded, too.
+        :param lewd_limits: The 'lewd level' limits. 2 = sfw, 4 = moderately nsfw, 6 = super nsfw.
+
+        .. note::
+
+            Even if lewd_limits[1] is set to 6, allow_r18 needs to be set to download x_restrict
+            tagged items.
         """
         self.aapi = aapi
         self.papi = papi
 
         self.allow_r18 = allow_r18
+        self.lewd_limits = lewd_limits
 
     def download_page(self, raw_dir: Path, items: List[DownloadableImage]):
         """
@@ -171,8 +178,25 @@ class Downloader(object):
         to_dl = []
 
         for illust in illusts:
+            id = illust['id']
+            title = illust['title']
+            lewd_level = illust['sanity_level']
+            # granular sfw checks
+            if lewd_level < self.lewd_limits[0]:
+                if not silent:
+                    print(f"Skipping illustation {id} ({title}): "
+                          f"lewd level of {lewd_level} is below limit")
+
+                continue
+
+            if lewd_level > self.lewd_limits[1]:
+                if not silent:
+                    print(f"Skipping illustation {id} ({title}): "
+                          f"lewd level of {lewd_level} is above limit")
+
+                continue
+
             # R-18 tag
-            # todo: make this more granular, with sanity_level...
             if illust['x_restrict'] and not self.allow_r18:
                 if not silent:
                     print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
@@ -279,6 +303,10 @@ def main():
                         default="./output")
     parser.add_argument("--allow-r18", action="store_true",
                         help="If R-18 works should also be downloaded")
+    parser.add_argument("--min-lewd-level", type=int, default=0,
+                        help="The minimum 'lewd level'")
+    parser.add_argument("--max-lewd-level", type=int, default=6,
+                        help="The maximum 'lewd level'")
 
     parsers = parser.add_subparsers(dest="subcommand")
 
@@ -304,7 +332,8 @@ def main():
     print("Authenticating with Pixiv...")
     aapi.auth(username=args.USERNAME, password=args.PASSWORD)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
-    dl = Downloader(aapi, public_api, allow_r18=args.allow_r18)
+    dl = Downloader(aapi, public_api, allow_r18=args.allow_r18,
+                    lewd_limits=(args.min_lewd_level, args.max_lewd_level))
     print(f"Successfully logged in as {aapi.user_id}")
 
     output = Path(args.output)
