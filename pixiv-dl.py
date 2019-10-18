@@ -181,6 +181,12 @@ class Downloader(object):
             id = illust['id']
             title = illust['title']
             lewd_level = illust['sanity_level']
+            if not illust['visible']:
+                if not silent:
+                    print(f"Skipping illustration {id} because it is not marked as visible!")
+
+                continue
+
             # granular sfw checks
             if lewd_level < self.lewd_limits[0]:
                 if not silent:
