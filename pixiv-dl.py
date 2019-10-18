@@ -76,7 +76,9 @@ class Downloader(object):
             output_dir = raw_dir / str(item.id)
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            if (output_dir / "marker").exists():
+            marker = output_dir / "marker.json"
+
+            if marker.exists():
                 print(f"Skipping download for {item.id} as marker already exists")
                 return
 
@@ -90,7 +92,9 @@ class Downloader(object):
 
             print(f"Successfully downloaded image for {item.id}")
 
-        (raw_dir / str(items[0].id) / "marker").write_text("")
+        (raw_dir / str(items[0].id) / "marker.json").write_text(json.dumps({
+            "downloaded": arrow.utcnow().isoformat()
+        }))
 
         print(f"Successfully downloaded {item.id}")
 
