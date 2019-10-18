@@ -8,6 +8,7 @@ license = "GPL-3.0-or-later"
 [tool.poetry.dependencies]
 python = "^3.7"
 pixivpy = "^3.5.0"
+arrow = "^0.15.2"
 
 [tool.poetry.dev-dependencies]
 

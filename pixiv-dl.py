@@ -10,9 +10,16 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from pprint import pprint
 from typing import List
 
+import arrow
 import pixivpy3
+
+
+# fucking pycharm
+# https://github.com/yellowbluesky/PixivforMuzei3/blob/master/app/src/main/java/com/antony/muzei
+# /pixiv/PixivArtWorker.java#L503
 
 
 @dataclass
@@ -102,6 +109,11 @@ class Downloader(object):
         """
         Stores the metadata for a specified illustration.
         """
+        illust["_meta"] = {
+            "download-date": arrow.utcnow().isoformat(),
+            "tool": "pixiv-dl"
+        }
+
         raw = (output_dir / "raw")
         raw.mkdir(exist_ok=True)
 
@@ -113,6 +125,43 @@ class Downloader(object):
         # write the raw metadata for later usage, if needed
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
+    @staticmethod
+    def depaginate_download(meth, param_name: str = "last_bookmark_id", search_name: str = None):
+        """
+        Depaginates a method. Pass a partial of the method you want here to depaginate.
+
+        :param param_name: The param name to use for paginating.
+        :param search_name: The search name to use in the regexp.
+        """
+        if search_name is None:
+            search_name = param_name
+
+        last_id = None
+        to_process = []
+
+        for x in range(0, 999):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
+            # page = x + 1
+            if last_id is None:
+                print("Downloading initial illustrations page...")
+                response = meth()
+            else:
+                print(f"Downloading illustrations page after {last_id}")
+                params = {param_name: last_id}
+                response = meth(**params)
+
+            illusts = response['illusts']
+            print(f"Downloaded {len(illusts)} objects")
+            to_process += illusts
+
+            next_url = response['next_url']
+            if next_url is not None:
+                last_id = re.findall(f"{search_name}=([0-9]+)", next_url)[0]
+            else:
+                # no more bookmarks!
+                break
+
+        return to_process
+
     def download_bookmarks(self, output_dir: Path):
         """
         Downloads the bookmarks for this user.
@@ -121,32 +170,8 @@ class Downloader(object):
         raw = (output_dir / "raw")
         raw.mkdir(exist_ok=True)
 
-        last_bookmark_id = None
-        to_process = []
-
-        for x in range(0, 999):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
-            # page = x + 1
-            if last_bookmark_id is None:
-                print("Downloading initial bookmark page...")
-                response = self.aapi.user_bookmarks_illust(
-                    self.aapi.user_id
-                )
-            else:
-                print(f"Downloading bookmark page after {last_bookmark_id[0]}")
-                response = self.aapi.user_bookmarks_illust(
-                    self.aapi.user_id, max_bookmark_id=last_bookmark_id[0]
-                )
-            illusts = response['illusts']
-            print(f"Downloaded {len(illusts)} objects")
-            to_process += illusts
-
-            next_url = response['next_url']
-            if next_url is not None:
-                last_bookmark_id = re.findall("max_bookmark_id=([0-9]+)", next_url)
-            else:
-                # no more bookmarks!
-                break
-
+        fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
+        to_process = self.depaginate_download(fn, param_name="max_bookmark_id")
         # downloadable objects, list of lists
         to_dl = []
 
@@ -168,6 +193,72 @@ class Downloader(object):
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
             e.map(partial(self.download_page, raw), to_dl)
+
+    def mirror_user(self, output_dir: Path, user_id: int, *, full: bool = False):
+        """
+        Mirrors a user.
+        """
+        raw = (output_dir / "raw")
+        raw.mkdir(exist_ok=True)
+
+        # the images themselves are downloaded to raw/ but we symlink them into the user dir
+        user_dir = (output_dir / "users" / str(user_id))
+        user_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"Downloading info for user {user_id}...")
+        user_info = self.aapi.user_detail(user_id)
+
+        # unfortunately, this doesn't give the nice background image...
+        images = user_info['user']['profile_image_urls']
+        url = images['medium']
+        suffix = url.split(".")[-1]
+        print(f"Saving profile image...")
+        self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
+
+        print(f"Saving metadata...")
+        user_info["_meta"] = {
+            "download-date": arrow.utcnow().isoformat(),
+            "tool": "pixiv-dl"
+        }
+        (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
+
+        print(f"Downloading all works for user {user_id} || {user_info['user']['name']} "
+              f"|| {user_info['user']['account']}")
+        fn = partial(self.aapi.user_illusts, user_id=user_id)
+        to_process = self.depaginate_download(fn, param_name="offset")
+
+        to_dl = []
+        for illust in to_process:
+            # R-18 tag
+            if illust['x_restrict'] and not self.allow_r18:
+                print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
+                continue
+
+            self.store_illust_metadata(output_dir, illust)
+            obs = self.make_downloadable(illust)
+            to_dl.append(obs)
+            print(f"Processed metadata for {illust['title']} with {len(obs)} pages")
+
+        print("Downloading images concurrently...")
+        with ThreadPoolExecutor(4) as e:
+            e.map(partial(self.download_page, raw), to_dl)
+
+        print("Setting up symlinks...")
+        for illust in sorted(to_process, key=lambda i: arrow.get(i['create_date'])):
+            original_dir = (raw / str(illust['id']))
+            final_dir = (user_dir / str(illust['id']))
+            print(f"Linking {final_dir} -> {original_dir}")
+
+            # no easy way to check if a broken symlink exists other than just... doing this
+            try:
+                final_dir.unlink()
+            except FileNotFoundError:
+                pass
+
+            final_dir.symlink_to(
+                original_dir.resolve(),
+                target_is_directory=True
+            )
 
 
 def main():
@@ -211,12 +302,16 @@ def main():
     dl = Downloader(aapi, public_api, allow_r18=args.allow_r18)
     print(f"Successfully logged in as {aapi.user_id}")
 
+    output = Path(args.output)
     subcommand = args.subcommand
     if subcommand == "bookmarks":
         print("Downloading all bookmarks...")
-        return dl.download_bookmarks(Path(args.output))
+        return dl.download_bookmarks(output)
     elif subcommand == "following":
         print("Downloading your following...")
+    elif subcommand == "mirror":
+        print("Mirroring a user...")
+        return dl.mirror_user(output, args.userid, full=args.full)
     else:
         print(f"Unknown command {subcommand}")
 
