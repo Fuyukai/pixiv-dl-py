@@ -141,12 +141,16 @@ class Downloader(object):
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
     @staticmethod
-    def depaginate_download(meth, param_name: str = "last_bookmark_id", search_name: str = None):
+    def depaginate_download(meth,
+                            param_name: str = "last_bookmark_id",
+                            search_name: str = None,
+                            max_items: int = None):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
         :param param_name: The param name to use for paginating.
         :param search_name: The search name to use in the regexp.
+        :param max_items: The maximum items to depaginate.
         """
         if search_name is None:
             search_name = param_name
@@ -154,7 +158,7 @@ class Downloader(object):
         last_id = None
         to_process = []
 
-        for x in range(0, 999):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
+        for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
             # page = x + 1
             if last_id is None:
                 print("Downloading initial illustrations page...")
@@ -165,8 +169,11 @@ class Downloader(object):
                 response = meth(**params)
 
             illusts = response["illusts"]
-            print(f"Downloaded {len(illusts)} objects")
+            print(f"Downloaded {len(illusts)} objects (current tally: {len(to_process)})")
             to_process += illusts
+
+            if max_items is not None and len(to_process) >= max_items:
+                break
 
             next_url = response["next_url"]
             if next_url is not None:
@@ -343,6 +350,42 @@ class Downloader(object):
 
             final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
 
+    def download_following(self, output_dir: Path, max_items: int = 100):
+        """
+        Downloads all your following.
+
+        :param max_items: The maximum number of items to download.
+        """
+        raw = output_dir / "raw"
+        raw.mkdir(exist_ok=True)
+
+        follow_dir = output_dir / "following"
+        follow_dir.mkdir(exist_ok=True)
+
+        fn = partial(self.aapi.illust_follow)
+        to_process = self.depaginate_download(fn, max_items=max_items, param_name="offset")
+        to_dl = self.process_and_save_illusts(raw, to_process)
+
+        print("Downloading images concurrently...")
+
+        # inner function
+        def downloader(items: List[DownloadableImage]):
+            self.download_page(raw, items)
+            # start symlinking
+            original_dir = raw / str(items[0].id)
+            final_dir = follow_dir / str(items[0].id)
+            print(f"Linking {final_dir} -> {original_dir}")
+
+            try:
+                final_dir.unlink()
+            except FileNotFoundError:
+                pass
+
+            final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
+
+        with ThreadPoolExecutor(4) as e:
+            e.map(downloader, to_dl)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -423,6 +466,7 @@ def main():
         return dl.download_bookmarks(output)
     elif subcommand == "following":
         print("Downloading your following...")
+        return dl.download_following(output)
     elif subcommand == "mirror":
         print("Mirroring a user...")
         return dl.mirror_user(output, args.userid, full=args.full)
