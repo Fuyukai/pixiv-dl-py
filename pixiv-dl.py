@@ -10,7 +10,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import List, Set
+from typing import List, Set, Any
 
 import arrow
 import pixivpy3
@@ -92,9 +92,9 @@ class Downloader(object):
 
             print(f"Successfully downloaded image for {item.id}")
 
-        (raw_dir / str(items[0].id) / "marker.json").write_text(json.dumps({
-            "downloaded": arrow.utcnow().isoformat()
-        }))
+        (raw_dir / str(items[0].id) / "marker.json").write_text(
+            json.dumps({"downloaded": arrow.utcnow().isoformat()})
+        )
 
         print(f"Successfully downloaded {item.id}")
 
@@ -145,26 +145,26 @@ class Downloader(object):
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
     @staticmethod
-    def depaginate_download(meth,
-                            param_name: str = "last_bookmark_id",
-                            search_name: str = None,
-                            max_items: int = None):
+    def depaginate_download(
+        meth, param_name: str = "last_bookmark_id", search_name: str = None, max_items: int = None,
+        initial_param: Any = None,
+    ):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
         :param param_name: The param name to use for paginating.
         :param search_name: The search name to use in the regexp.
         :param max_items: The maximum items to depaginate.
+        :param initial_param: The initial offset to depaginate.
         """
         if search_name is None:
             search_name = param_name
 
-        last_id = None
+        last_id = initial_param
         to_process = []
 
         for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
-            # page = x + 1
-            if last_id is None:
+            if not last_id:
                 print("Downloading initial illustrations page...")
                 response = meth()
             else:
@@ -366,12 +366,6 @@ class Downloader(object):
         follow_dir = output_dir / "following"
         follow_dir.mkdir(exist_ok=True)
 
-        fn = partial(self.aapi.illust_follow)
-        to_process = self.depaginate_download(fn, max_items=max_items, param_name="offset")
-        to_dl = self.process_and_save_illusts(raw, to_process)
-
-        print("Downloading images concurrently...")
-
         # inner function
         def downloader(items: List[DownloadableImage]):
             self.download_page(raw, items)
@@ -387,8 +381,19 @@ class Downloader(object):
 
             final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
 
-        with ThreadPoolExecutor(4) as e:
-            e.map(downloader, to_dl)
+        for x in range(0, max_items, 30):
+            print(f"Downloading items {x + 1} - {x + 31}")
+
+            fn = partial(self.aapi.illust_follow)
+            to_process = self.depaginate_download(
+                fn, max_items=30, param_name="offset", initial_param=x,
+            )
+            to_dl = self.process_and_save_illusts(raw, to_process)
+
+            print("Downloading images concurrently...")
+
+            with ThreadPoolExecutor(4) as e:
+                e.map(downloader, to_dl)
 
 
 def main():
@@ -424,6 +429,10 @@ def main():
 
     # download all following
     following_mode = parsers.add_parser("following", help="Download all following")
+    following_mode.add_argument(
+        "-l", "--limit", default=500, help="The maximum number of items to download",
+        type=int,
+    )
 
     # mirror mode
     mirror_mode = parsers.add_parser("mirror", help="Mirror a user")
@@ -470,7 +479,7 @@ def main():
         return dl.download_bookmarks(output)
     elif subcommand == "following":
         print("Downloading your following...")
-        return dl.download_following(output)
+        return dl.download_following(output, max_items=args.limit)
     elif subcommand == "mirror":
         print("Mirroring a user...")
         return dl.mirror_user(output, args.userid, full=args.full)
