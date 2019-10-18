@@ -35,8 +35,15 @@ class DownloadableImage:
 
 
 class Downloader(object):
-    def __init__(self, aapi: pixivpy3.AppPixivAPI, papi: pixivpy3.PixivAPI,
-                 *, allow_r18: bool = False, lewd_limits=(0, 6)):
+    def __init__(
+        self,
+        aapi: pixivpy3.AppPixivAPI,
+        papi: pixivpy3.PixivAPI,
+        *,
+        allow_r18: bool = False,
+        lewd_limits=(0, 6),
+
+    ):
         """
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
@@ -87,25 +94,27 @@ class Downloader(object):
         """
         Makes a list of downloadable images from an illustration object.
         """
-        illust_id = illust['id']
+        illust_id = illust["id"]
 
         # if it's a single image...
-        single_image = illust['page_count'] == 1
+        single_image = illust["page_count"] == 1
         if single_image:
-            obs = [DownloadableImage(
-                illust_id,
-                multi_page=False,
-                page_num=1,
-                url=illust['meta_single_page']['original_image_url']
-            )]
+            obs = [
+                DownloadableImage(
+                    illust_id,
+                    multi_page=False,
+                    page_num=1,
+                    url=illust["meta_single_page"]["original_image_url"],
+                )
+            ]
         else:
             obs = []
-            for idx, subpage in enumerate(illust['meta_pages']):
+            for idx, subpage in enumerate(illust["meta_pages"]):
                 obb = DownloadableImage(
                     illust_id,
                     multi_page=True,
                     page_num=idx + 1,
-                    url=subpage['image_urls']['original']
+                    url=subpage["image_urls"]["original"],
                 )
                 obs.append(obb)
 
@@ -118,19 +127,21 @@ class Downloader(object):
         """
         illust["_meta"] = {
             "download-date": arrow.utcnow().isoformat(),
-            "tool": "pixiv-dl"
+            "tool": "pixiv-dl",
         }
 
-        illust_id = illust['id']
+        illust_id = illust["id"]
         # the actual location
-        subdir = (output_dir / str(illust_id))
+        subdir = output_dir / str(illust_id)
         subdir.mkdir(exist_ok=True)
 
         # write the raw metadata for later usage, if needed
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
     @staticmethod
-    def depaginate_download(meth, param_name: str = "last_bookmark_id", search_name: str = None):
+    def depaginate_download(
+        meth, param_name: str = "last_bookmark_id", search_name: str = None
+    ):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
@@ -143,7 +154,9 @@ class Downloader(object):
         last_id = None
         to_process = []
 
-        for x in range(0, 999):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
+        for x in range(
+            0, 999
+        ):  # reasonable upper bound is 999, 999 * 25 is 25k bookmarks...
             # page = x + 1
             if last_id is None:
                 print("Downloading initial illustrations page...")
@@ -153,11 +166,11 @@ class Downloader(object):
                 params = {param_name: last_id}
                 response = meth(**params)
 
-            illusts = response['illusts']
+            illusts = response["illusts"]
             print(f"Downloaded {len(illusts)} objects")
             to_process += illusts
 
-            next_url = response['next_url']
+            next_url = response["next_url"]
             if next_url is not None:
                 last_id = re.findall(f"{search_name}=([0-9]+)", next_url)[0]
             else:
@@ -166,9 +179,9 @@ class Downloader(object):
 
         return to_process
 
-    def process_and_save_illusts(self, output_dir: Path,
-                                 illusts: List[dict],
-                                 silent: bool = False) -> List[List[DownloadableImage]]:
+    def process_and_save_illusts(
+        self, output_dir: Path, illusts: List[dict], silent: bool = False
+    ) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
 
@@ -178,34 +191,42 @@ class Downloader(object):
         to_dl = []
 
         for illust in illusts:
-            id = illust['id']
-            title = illust['title']
-            lewd_level = illust['sanity_level']
-            if not illust['visible']:
+            id = illust["id"]
+            title = illust["title"]
+            lewd_level = illust["sanity_level"]
+            if not illust["visible"]:
                 if not silent:
-                    print(f"Skipping illustration {id} because it is not marked as visible!")
+                    print(
+                        f"Skipping illustration {id} because it is not marked as visible!"
+                    )
 
                 continue
 
             # granular sfw checks
             if lewd_level < self.lewd_limits[0]:
                 if not silent:
-                    print(f"Skipping illustation {id} ({title}): "
-                          f"lewd level of {lewd_level} is below limit")
+                    print(
+                        f"Skipping illustation {id} ({title}): "
+                        f"lewd level of {lewd_level} is below limit"
+                    )
 
                 continue
 
             if lewd_level > self.lewd_limits[1]:
                 if not silent:
-                    print(f"Skipping illustation {id} ({title}): "
-                          f"lewd level of {lewd_level} is above limit")
+                    print(
+                        f"Skipping illustation {id} ({title}): "
+                        f"lewd level of {lewd_level} is above limit"
+                    )
 
                 continue
 
             # R-18 tag
-            if illust['x_restrict'] and not self.allow_r18:
+            if illust["x_restrict"] and not self.allow_r18:
                 if not silent:
-                    print(f"Skipping R-18 illustration {illust['id']} ({illust['title']})")
+                    print(
+                        f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
+                    )
 
                 continue
 
@@ -214,8 +235,10 @@ class Downloader(object):
             to_dl.append(obs)
 
             if not silent:
-                print(f"Processed metadata for {illust['id']} ({illust['title']}) "
-                      f"with {len(obs)} pages")
+                print(
+                    f"Processed metadata for {illust['id']} ({illust['title']}) "
+                    f"with {len(obs)} pages"
+                )
 
         return to_dl
 
@@ -224,7 +247,7 @@ class Downloader(object):
         Downloads the bookmarks for this user.
         """
         # set up the output dirs
-        raw = (output_dir / "raw")
+        raw = output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
         fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
@@ -242,19 +265,19 @@ class Downloader(object):
         """
         Mirrors a user.
         """
-        raw = (output_dir / "raw")
+        raw = output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
         # the images themselves are downloaded to raw/ but we symlink them into the user dir
-        user_dir = (output_dir / "users" / str(user_id))
+        user_dir = output_dir / "users" / str(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"Downloading info for user {user_id}...")
         user_info = self.aapi.user_detail(user_id)
 
         # unfortunately, this doesn't give the nice background image...
-        images = user_info['user']['profile_image_urls']
-        url = images['medium']
+        images = user_info["user"]["profile_image_urls"]
+        url = images["medium"]
         suffix = url.split(".")[-1]
         print(f"Saving profile image...")
         self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
@@ -262,12 +285,14 @@ class Downloader(object):
         print(f"Saving metadata...")
         user_info["_meta"] = {
             "download-date": arrow.utcnow().isoformat(),
-            "tool": "pixiv-dl"
+            "tool": "pixiv-dl",
         }
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
-        print(f"Downloading all works for user {user_id} || {user_info['user']['name']} "
-              f"|| {user_info['user']['account']}")
+        print(
+            f"Downloading all works for user {user_id} || {user_info['user']['name']} "
+            f"|| {user_info['user']['account']}"
+        )
 
         # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
@@ -279,9 +304,9 @@ class Downloader(object):
             e.map(partial(self.download_page, raw), to_dl)
 
         print("Setting up symlinks...")
-        for illust in sorted(to_process, key=lambda i: arrow.get(i['create_date'])):
-            original_dir = (raw / str(illust['id']))
-            final_dir = (user_dir / str(illust['id']))
+        for illust in sorted(to_process, key=lambda i: arrow.get(i["create_date"])):
+            original_dir = raw / str(illust["id"])
+            final_dir = user_dir / str(illust["id"])
             print(f"Linking {final_dir} -> {original_dir}")
 
             # no easy way to check if a broken symlink exists other than just... doing this
@@ -290,29 +315,37 @@ class Downloader(object):
             except FileNotFoundError:
                 pass
 
-            final_dir.symlink_to(
-                original_dir.resolve(),
-                target_is_directory=True
-            )
+            final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description=textwrap.dedent("""A pixiv downloader tool.
+        description=textwrap.dedent(
+            """A pixiv downloader tool.
         
         This can download your bookmarks, your following feed, whole user accounts, etc.
-        """)
+        """
+        )
     )
     parser.add_argument("-u", "--username", help="Your pixiv username", required=True)
     parser.add_argument("-p", "--password", help="Your pixiv password", required=True)
-    parser.add_argument("-o", "--output", help="The output directory for the command to run",
-                        default="./output")
-    parser.add_argument("--allow-r18", action="store_true",
-                        help="If R-18 works should also be downloaded")
-    parser.add_argument("--min-lewd-level", type=int, default=0,
-                        help="The minimum 'lewd level'")
-    parser.add_argument("--max-lewd-level", type=int, default=6,
-                        help="The maximum 'lewd level'")
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="The output directory for the command to run",
+        default="./output",
+    )
+    parser.add_argument(
+        "--allow-r18",
+        action="store_true",
+        help="If R-18 works should also be downloaded",
+    )
+    parser.add_argument(
+        "--min-lewd-level", type=int, default=0, help="The minimum 'lewd level'"
+    )
+    parser.add_argument(
+        "--max-lewd-level", type=int, default=6, help="The maximum 'lewd level'"
+    )
 
     parsers = parser.add_subparsers(dest="subcommand")
 
@@ -325,8 +358,12 @@ def main():
     # mirror mode
     mirror_mode = parsers.add_parser("mirror", help="Mirror a user")
     mirror_mode.add_argument("userid", help="The user ID to mirror", type=int)
-    mirror_mode.add_argument("-f", "--full", action="store_true", help="If this should also "
-                                                                       "mirror all their bookmarks")
+    mirror_mode.add_argument(
+        "-f",
+        "--full",
+        action="store_true",
+        help="If this should also " "mirror all their bookmarks",
+    )
 
     args = parser.parse_args()
 
@@ -338,8 +375,12 @@ def main():
     print("Authenticating with Pixiv...")
     aapi.auth(username=args.username, password=args.password)
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
-    dl = Downloader(aapi, public_api, allow_r18=args.allow_r18,
-                    lewd_limits=(args.min_lewd_level, args.max_lewd_level))
+    dl = Downloader(
+        aapi,
+        public_api,
+        allow_r18=args.allow_r18,
+        lewd_limits=(args.min_lewd_level, args.max_lewd_level),
+    )
     print(f"Successfully logged in as {aapi.user_id}")
 
     output = Path(args.output)
