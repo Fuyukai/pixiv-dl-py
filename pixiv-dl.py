@@ -10,10 +10,12 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from pprint import pprint
 from typing import List, Set, Any, Tuple
 
 import arrow
 import pixivpy3
+from pixivpy3 import PixivError
 
 
 # fucking pycharm
@@ -35,16 +37,16 @@ class DownloadableImage:
 
 class Downloader(object):
     def __init__(
-        self,
-        aapi: pixivpy3.AppPixivAPI,
-        papi: pixivpy3.PixivAPI,
-        output_dir: Path,
-        *,
-        allow_r18: bool = False,
-        lewd_limits=(0, 6),
-        filter_tags: Set[str] = None,
-        required_tags: Set[str] = None,
-        bookmark_limits: Tuple[int, int] = None,
+            self,
+            aapi: pixivpy3.AppPixivAPI,
+            papi: pixivpy3.PixivAPI,
+            output_dir: Path,
+            *,
+            allow_r18: bool = False,
+            lewd_limits=(0, 6),
+            filter_tags: Set[str] = None,
+            required_tags: Set[str] = None,
+            bookmark_limits: Tuple[int, int] = None,
     ):
         """
         :param aapi: The Pixiv app API interface.
@@ -75,6 +77,35 @@ class Downloader(object):
 
         self.bookmark_limits = bookmark_limits
 
+    def retry_wrapper(self, cbl):
+        """
+        Retries a pixiv API request, re-authing if needed
+        """
+        # 3 retries
+        for x in range(0, 3):
+            try:
+                res = cbl()
+            except PixivError as e:
+                if 'connection aborted' in str(e):
+                    # ignore
+                    continue
+
+                raise
+
+            # check for login
+            if res is not None and 'error' in res:
+                if 'invalid_grant' not in res['error']['message']:
+                    pprint(res)
+                    raise Exception("Unknown error")
+                # re-auths with the refresh token and retries
+                self.aapi.auth()
+                self.papi.set_auth(self.aapi.access_token, self.aapi.refresh_token)
+                continue
+            else:
+                return res
+        else:
+            raise Exception(f"Failed to run {cbl} 3 times")
+
     def download_page(self, items: List[DownloadableImage]):
         """
         Downloads a page image.
@@ -91,7 +122,8 @@ class Downloader(object):
 
             print(f"Downloading {item.id} page {item.page_num}")
             try:
-                self.aapi.download(url=item.url, path=output_dir, replace=True)
+                p = partial(self.aapi.download, url=item.url, path=output_dir, replace=True)
+                self.retry_wrapper(p)
             except Exception:
                 print("Failed to download image...")
                 traceback.print_exc()
@@ -155,13 +187,13 @@ class Downloader(object):
         # write the raw metadata for later usage, if needed
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
-    @staticmethod
     def depaginate_download(
-        meth,
-        param_name: str = "max_bookmark_id",
-        search_name: str = None,
-        max_items: int = None,
-        initial_param: Any = None,
+            self,
+            meth,
+            param_name: str = "max_bookmark_id",
+            search_name: str = None,
+            max_items: int = None,
+            initial_param: Any = None,
     ):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
@@ -180,11 +212,12 @@ class Downloader(object):
         for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
             if not last_id:
                 print("Downloading initial illustrations page...")
-                response = meth()
+                response = self.retry_wrapper(meth)
             else:
                 print(f"Downloading illustrations page after {last_id}")
                 params = {param_name: last_id}
-                response = meth(**params)
+                p = partial(meth, **params)
+                response = self.retry_wrapper(p)
 
             illusts = response["illusts"]
             print(f"Downloaded {len(illusts)} objects (current tally: {len(to_process)})")
@@ -276,7 +309,7 @@ class Downloader(object):
         return msg is not None, msg
 
     def process_and_save_illusts(
-        self, illusts: List[dict], silent: bool = False
+            self, illusts: List[dict], silent: bool = False
     ) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
@@ -427,6 +460,8 @@ class Downloader(object):
         # no plural, this is the singular tag
         tag_dir = tags_dir / main_tag
         tag_dir.mkdir(exist_ok=True)
+
+        max_items = min(max_items, 5000)  # pixiv limit :(
 
         for x in range(0, max_items, 30):
             print(f"Downloading items {x + 1} - {x + 31}")
