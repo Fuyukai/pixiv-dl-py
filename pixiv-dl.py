@@ -191,6 +191,35 @@ class Downloader(object):
 
         return to_process
 
+    @staticmethod
+    def do_symlinks(raw_dir: Path, output_dir: Path, illust_id: int):
+        """
+        Performs symlinking for an illustration.
+        """
+        original_dir = raw_dir / str(illust_id)
+        # invisible or otherwise excluded
+        if not original_dir.exists():
+            return
+
+        final_dir = output_dir / str(illust_id)
+
+        # no easy way to check if a broken symlink exists other than just... doing this
+        try:
+            final_dir.unlink()
+        except FileNotFoundError:
+            pass
+
+        final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
+        print(f"Linked {final_dir} -> {original_dir}")
+
+    def do_download_with_symlinks(self, raw_dir: Path, output_dir: Path,
+                                  items: List[DownloadableImage]):
+        """
+        Does a download with symlinking.
+        """
+        self.download_page(raw_dir, items)
+        self.do_symlinks(raw_dir, output_dir, items[0].id)
+
     def process_and_save_illusts(
         self, output_dir: Path, illusts: List[dict], silent: bool = False
     ) -> List[List[DownloadableImage]]:
@@ -348,36 +377,12 @@ class Downloader(object):
             fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
             to_process_bookmarks = self.depaginate_download(fn2)
             to_dl_bookmarks = self.process_and_save_illusts(raw, to_process_bookmarks)
-            to_dl = to_dl_works + to_dl_bookmarks
-        else:
-            to_dl = to_dl_works
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
-            e.map(partial(self.download_page, raw), to_dl)
-
-        print("Setting up symlinks...")
-
-        def do_symlinks(l, output):
-            for illust in l:
-                original_dir = raw / str(illust["id"])
-                if not original_dir.exists():
-                    continue
-
-                final_dir = output / str(illust["id"])
-                print(f"Linking {final_dir} -> {original_dir}")
-
-                # no easy way to check if a broken symlink exists other than just... doing this
-                try:
-                    final_dir.unlink()
-                except FileNotFoundError:
-                    pass
-
-                final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
-
-        do_symlinks(to_process_works, works_dir)
-        if full:
-            do_symlinks(to_process_bookmarks, bookmarks_dir)
+            e.map(partial(self.do_download_with_symlinks, raw, works_dir), to_dl_works)
+            if full:
+                e.map(partial(self.do_download_with_symlinks, raw, bookmarks_dir), to_dl_bookmarks)
 
     def download_following(self, output_dir: Path, max_items: int = 100):
         """
@@ -390,21 +395,6 @@ class Downloader(object):
 
         follow_dir = output_dir / "following"
         follow_dir.mkdir(exist_ok=True)
-
-        # inner function
-        def downloader(items: List[DownloadableImage]):
-            self.download_page(raw, items)
-            # start symlinking
-            original_dir = raw / str(items[0].id)
-            final_dir = follow_dir / str(items[0].id)
-            print(f"Linking {final_dir} -> {original_dir}")
-
-            try:
-                final_dir.unlink()
-            except FileNotFoundError:
-                pass
-
-            final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
 
         for x in range(0, max_items, 30):
             print(f"Downloading items {x + 1} - {x + 31}")
@@ -422,14 +412,14 @@ class Downloader(object):
             print("Downloading images concurrently...")
 
             with ThreadPoolExecutor(4) as e:
-                e.map(downloader, to_dl)
+                e.map(partial(self.do_download_with_symlinks, raw, follow_dir), to_dl)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=textwrap.dedent(
             """A pixiv downloader tool.
-        
+
         This can download your bookmarks, your following feed, whole user accounts, etc.
         """
         )
