@@ -212,8 +212,9 @@ class Downloader(object):
         final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
         print(f"Linked {final_dir} -> {original_dir}")
 
-    def do_download_with_symlinks(self, raw_dir: Path, output_dir: Path,
-                                  items: List[DownloadableImage]):
+    def do_download_with_symlinks(
+        self, raw_dir: Path, output_dir: Path, items: List[DownloadableImage]
+    ):
         """
         Does a download with symlinking.
         """
