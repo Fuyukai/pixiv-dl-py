@@ -44,6 +44,7 @@ class Downloader(object):
         lewd_limits=(0, 6),
         filter_tags: Set[str] = None,
         required_tags: Set[str] = None,
+        bookmark_limits: Tuple[int, int] = None,
     ):
         """
         :param aapi: The Pixiv app API interface.
@@ -55,6 +56,7 @@ class Downloader(object):
         :param lewd_limits: The 'lewd level' limits. 2 = sfw, 4 = moderately nsfw, 6 = super nsfw.
         :param filter_tags: If an illustration has any of these tags, it will be ignored.
         :param required_tags: If an illustration doesn't have any of these tags, it will be ignored.
+        :param bookmark_limits: The bookmark limits. Setting none for a field will ignore it.
 
         .. note::
 
@@ -70,6 +72,8 @@ class Downloader(object):
 
         self.filtered_tags = filter_tags
         self.required_tags = required_tags
+
+        self.bookmark_limits = bookmark_limits
 
     def download_page(self, items: List[DownloadableImage]):
         """
@@ -239,6 +243,7 @@ class Downloader(object):
 
         filtered = tags.intersection(self.filtered_tags)
         required = tags.intersection(self.required_tags)
+        bookmarks = illust['total_bookmarks']
 
         if not illust['visible']:
             msg = "Illustration is not visible"
@@ -257,6 +262,12 @@ class Downloader(object):
 
         elif self.required_tags and not required:
             msg = f"Illustration missing any of the required tags {self.required_tags}"
+
+        elif self.bookmark_limits[1] is not None and self.bookmark_limits[1] < bookmarks:
+            msg = f"Illustration has too many bookmarks ({bookmarks})"
+
+        elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
+            msg = f"Illustation doesn't have enough bookmarks ({bookmarks})"
 
         return msg is not None, msg
 
@@ -413,16 +424,26 @@ def main():
     parser.add_argument(
         "-o", "--output", help="The output directory for the command to run", default="./output"
     )
+
     parser.add_argument(
         "--allow-r18", action="store_true", help="If R-18 works should also be downloaded"
     )
+
     parser.add_argument("--min-lewd-level", type=int, default=0, help="The minimum 'lewd level'")
     parser.add_argument("--max-lewd-level", type=int, default=6, help="The maximum 'lewd level'")
+
     parser.add_argument(
         "--filter-tag", action="append", help="Ignore any illustrations with this tag"
     )
     parser.add_argument(
         "--require-tag", action="append", help="Require illustrations to have this tag"
+    )
+
+    parser.add_argument(
+        "--min-bookmarks", type=int, default=None, help="Minimum number of bookmarks"
+    )
+    parser.add_argument(  # i have no idea when this will ever be useful, but symmetry
+        "--max-bookmarks", type=int, default=None, help="Maximum number of bookmarks"
     )
 
     parsers = parser.add_subparsers(dest="subcommand")
@@ -484,6 +505,7 @@ def main():
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
         filter_tags=set(args.filter_tag),
         required_tags=set(args.require_tag),
+        bookmark_limits=(args.min_bookmarks, args.max_bookmarks),
     )
 
     subcommand = args.subcommand
