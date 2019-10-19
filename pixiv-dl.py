@@ -47,6 +47,7 @@ class Downloader(object):
             filter_tags: Set[str] = None,
             required_tags: Set[str] = None,
             bookmark_limits: Tuple[int, int] = None,
+            max_pages: int = None,
     ):
         """
         :param aapi: The Pixiv app API interface.
@@ -76,6 +77,8 @@ class Downloader(object):
         self.required_tags = required_tags
 
         self.bookmark_limits = bookmark_limits
+
+        self.max_pages = max_pages
 
     def retry_wrapper(self, cbl):
         """
@@ -306,6 +309,9 @@ class Downloader(object):
         elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
             msg = f"Illustration doesn't have enough bookmarks ({bookmarks})"
 
+        elif self.max_pages is not None and len(illust["meta_pages"]) > self.max_pages:
+            msg = f"Illustration has too many pages"
+
         return msg is not None, msg
 
     def process_and_save_illusts(
@@ -518,6 +524,10 @@ def main():
         "--max-bookmarks", type=int, default=None, help="Maximum number of bookmarks"
     )
 
+    parser.add_argument(
+        "--max-pages", type=int, default=None, help="Maximum number of pages"
+    )
+
     parsers = parser.add_subparsers(dest="subcommand")
 
     # download all bookmarks mode, no arguments
@@ -585,6 +595,7 @@ def main():
         filter_tags=set(x.lower() for x in args.filter_tag),
         required_tags=set(x.lower() for x in args.require_tag),
         bookmark_limits=(args.min_bookmarks, args.max_bookmarks),
+        max_pages=args.max_pages,
     )
 
     subcommand = args.subcommand
