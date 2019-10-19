@@ -243,7 +243,7 @@ class Downloader(object):
         lewd_level = illust["sanity_level"]
         tags = set()
         for td in illust["tags"]:
-            tags.update(set(td.values()))
+            tags.update(set(x.lower() for x in td.values() if x))
 
         filtered = tags.intersection(self.filtered_tags)
         required = tags.intersection(self.required_tags)
@@ -547,8 +547,8 @@ def main():
         output,
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
-        filter_tags=set(args.filter_tag),
-        required_tags=set(args.require_tag),
+        filter_tags=set(x.lower() for x in args.filter_tag),
+        required_tags=set(x.lower() for x in args.require_tag),
         bookmark_limits=(args.min_bookmarks, args.max_bookmarks),
     )
 
