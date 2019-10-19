@@ -38,6 +38,7 @@ class Downloader(object):
         self,
         aapi: pixivpy3.AppPixivAPI,
         papi: pixivpy3.PixivAPI,
+        output_dir: Path,
         *,
         allow_r18: bool = False,
         lewd_limits=(0, 6),
@@ -47,6 +48,7 @@ class Downloader(object):
         """
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
+        :param output_dir: The output directory.
 
         Behaviour params:
         :param allow_r18: If R-18 content should be downloaded, too.
@@ -61,6 +63,7 @@ class Downloader(object):
         """
         self.aapi = aapi
         self.papi = papi
+        self.output_dir = output_dir
 
         self.allow_r18 = allow_r18
         self.lewd_limits = lewd_limits
@@ -68,12 +71,12 @@ class Downloader(object):
         self.filtered_tags = filter_tags
         self.required_tags = required_tags
 
-    def download_page(self, raw_dir: Path, items: List[DownloadableImage]):
+    def download_page(self, items: List[DownloadableImage]):
         """
         Downloads a page image.
         """
         for item in items:
-            output_dir = raw_dir / str(item.id)
+            output_dir = self.output_dir / "raw" / str(item.id)
             output_dir.mkdir(parents=True, exist_ok=True)
 
             marker = output_dir / "marker.json"
@@ -92,7 +95,7 @@ class Downloader(object):
 
             print(f"Successfully downloaded image for {item.id}")
 
-        (raw_dir / str(items[0].id) / "marker.json").write_text(
+        (self.output_dir / "raw" / str(items[0].id) / "marker.json").write_text(
             json.dumps({"downloaded": arrow.utcnow().isoformat()})
         )
 
@@ -192,7 +195,7 @@ class Downloader(object):
         return to_process
 
     @staticmethod
-    def do_symlinks(raw_dir: Path, output_dir: Path, illust_id: int):
+    def do_symlinks(raw_dir: Path, dest_dir: Path, illust_id: int):
         """
         Performs symlinking for an illustration.
         """
@@ -201,7 +204,7 @@ class Downloader(object):
         if not original_dir.exists():
             return
 
-        final_dir = output_dir / str(illust_id)
+        final_dir = dest_dir / str(illust_id)
 
         # no easy way to check if a broken symlink exists other than just... doing this
         try:
@@ -212,17 +215,16 @@ class Downloader(object):
         final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
         print(f"Linked {final_dir} -> {original_dir}")
 
-    def do_download_with_symlinks(
-        self, raw_dir: Path, output_dir: Path, items: List[DownloadableImage]
-    ):
+    def do_download_with_symlinks(self, dest_dir: Path, items: List[DownloadableImage]):
         """
         Does a download with symlinking.
         """
-        self.download_page(raw_dir, items)
-        self.do_symlinks(raw_dir, output_dir, items[0].id)
+        raw_dir = self.output_dir / "raw"
+        self.download_page(items)
+        self.do_symlinks(raw_dir, dest_dir, items[0].id)
 
     def process_and_save_illusts(
-        self, output_dir: Path, illusts: List[dict], silent: bool = False
+        self, illusts: List[dict], silent: bool = False
     ) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
@@ -303,7 +305,8 @@ class Downloader(object):
 
                 continue
 
-            self.store_illust_metadata(output_dir, illust)
+            raw_dir = self.output_dir / "raw"
+            self.store_illust_metadata(raw_dir, illust)
             obs = self.make_downloadable(illust)
             to_dl.append(obs)
 
@@ -315,37 +318,37 @@ class Downloader(object):
 
         return to_dl
 
-    def download_bookmarks(self, output_dir: Path):
+    def download_bookmarks(self):
         """
         Downloads the bookmarks for this user.
         """
         # set up the output dirs
-        raw = output_dir / "raw"
+        raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
-        bookmark_dir = output_dir / "bookmarks"
+        bookmark_dir = self.output_dir / "bookmarks"
         bookmark_dir.mkdir(exist_ok=True)
 
         fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
         to_process = self.depaginate_download(fn, param_name="max_bookmark_id")
         # downloadable objects, list of lists
-        to_dl = self.process_and_save_illusts(raw, to_process)
+        to_dl = self.process_and_save_illusts(to_process)
         # free memory during the download process, we don't need these anymore
         to_process.clear()
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
-            e.map(partial(self.do_download_with_symlinks, raw, bookmark_dir), to_dl)
+            return list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
 
-    def mirror_user(self, output_dir: Path, user_id: int, *, full: bool = False):
+    def mirror_user(self, user_id: int, *, full: bool = False):
         """
         Mirrors a user.
         """
-        raw = output_dir / "raw"
+        raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
         # the images themselves are downloaded to raw/ but we symlink them into the user dir
-        user_dir = output_dir / "users" / str(user_id)
+        user_dir = self.output_dir / "users" / str(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
         works_dir = user_dir / "works"
         works_dir.mkdir(parents=True, exist_ok=True)
@@ -374,30 +377,33 @@ class Downloader(object):
         # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
         to_process_works = self.depaginate_download(fn, param_name="offset")
-        to_dl_works = self.process_and_save_illusts(raw, to_process_works)
+        to_dl_works = self.process_and_save_illusts(to_process_works)
 
         if full:
             print(f"Downloading all bookmarks for user {user_id}")
             fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
             to_process_bookmarks = self.depaginate_download(fn2)
-            to_dl_bookmarks = self.process_and_save_illusts(raw, to_process_bookmarks)
+            to_dl_bookmarks = self.process_and_save_illusts(to_process_bookmarks)
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
-            e.map(partial(self.do_download_with_symlinks, raw, works_dir), to_dl_works)
+            l1 = list(e.map(partial(self.do_download_with_symlinks, works_dir), to_dl_works))
             if full:
-                e.map(partial(self.do_download_with_symlinks, raw, bookmarks_dir), to_dl_bookmarks)
+                l2 = e.map(partial(self.do_download_with_symlinks, bookmarks_dir), to_dl_bookmarks)
+                return l1 + l2
+            else:
+                return l1
 
-    def download_following(self, output_dir: Path, max_items: int = 100):
+    def download_following(self, max_items: int = 100):
         """
         Downloads all your following.
 
         :param max_items: The maximum number of items to download.
         """
-        raw = output_dir / "raw"
+        raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
-        follow_dir = output_dir / "following"
+        follow_dir = self.output_dir / "following"
         follow_dir.mkdir(exist_ok=True)
 
         for x in range(0, max_items, 30):
@@ -411,12 +417,12 @@ class Downloader(object):
             if len(to_process) == 0:
                 return
 
-            to_dl = self.process_and_save_illusts(raw, to_process)
+            to_dl = self.process_and_save_illusts(to_process)
 
             print("Downloading images concurrently...")
 
             with ThreadPoolExecutor(4) as e:
-                e.map(partial(self.do_download_with_symlinks, raw, follow_dir), to_dl)
+                return list(e.map(partial(self.do_download_with_symlinks, follow_dir), to_dl))
 
 
 def main():
@@ -495,6 +501,7 @@ def main():
     dl = Downloader(
         aapi,
         public_api,
+        output,
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
         filter_tags=set(args.filter_tag),
@@ -504,16 +511,16 @@ def main():
     subcommand = args.subcommand
     if subcommand == "bookmarks":
         print("Downloading all bookmarks...")
-        return dl.download_bookmarks(output)
+        return dl.download_bookmarks()
     elif subcommand == "following":
         print("Downloading your following...")
-        return dl.download_following(output, max_items=args.limit)
+        return dl.download_following(max_items=args.limit)
     elif subcommand == "mirror":
         if args.full:
             print("Fully mirroring a user...")
         else:
             print("Mirroring a user...")
-        return dl.mirror_user(output, args.userid, full=args.full)
+        return dl.mirror_user(args.userid, full=args.full)
     else:
         print(f"Unknown command {subcommand}")
 
