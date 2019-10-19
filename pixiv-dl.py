@@ -271,7 +271,7 @@ class Downloader(object):
             msg = f"Illustration has too many bookmarks ({bookmarks})"
 
         elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
-            msg = f"Illustation doesn't have enough bookmarks ({bookmarks})"
+            msg = f"Illustration doesn't have enough bookmarks ({bookmarks})"
 
         return msg is not None, msg
 
