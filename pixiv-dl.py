@@ -414,7 +414,7 @@ class Downloader(object):
                 # list() call unwraps errors
                 list(e.map(partial(self.do_download_with_symlinks, follow_dir), to_dl))
 
-    def download_tag(self, main_tag: str):
+    def download_tag(self, main_tag: str, max_items: int = 500):
         """
         Downloads all items for a tag.
         """
@@ -427,9 +427,6 @@ class Downloader(object):
         # no plural, this is the singular tag
         tag_dir = tags_dir / main_tag
         tag_dir.mkdir(exist_ok=True)
-
-        # todo
-        max_items = 1000
 
         for x in range(0, max_items, 30):
             print(f"Downloading items {x + 1} - {x + 31}")
@@ -510,6 +507,9 @@ def main():
     # tag mode
     tag_mode = parsers.add_parser("tag", help="Download works with a tag")
     tag_mode.add_argument("tag", help="The main tag to filter by")
+    tag_mode.add_argument(
+        "-l", "--limit", default=500, help="The maximum number of items to download", type=int
+    )
 
     args = parser.parse_args()
 
@@ -566,7 +566,7 @@ def main():
             print("Mirroring a user...")
         return dl.mirror_user(args.userid, full=args.full)
     elif subcommand == "tag":
-        return dl.download_tag(args.tag)
+        return dl.download_tag(args.tag, max_items=args.limit)
     else:
         print(f"Unknown command {subcommand}")
 
