@@ -16,11 +16,15 @@ from typing import List, Set, Any, Tuple
 import arrow
 import pixivpy3
 from pixivpy3 import PixivError
+from termcolor import colored as coloured
 
 
 # fucking pycharm
 # https://github.com/yellowbluesky/PixivforMuzei3/blob/master/app/src/main/java/com/antony/muzei
 # /pixiv/PixivArtWorker.java#L503
+
+def cprint(msg: str, colour: str):
+    return print(coloured(msg, colour))
 
 
 @dataclass
@@ -120,25 +124,25 @@ class Downloader(object):
             marker = output_dir / "marker.json"
 
             if marker.exists():
-                print(f"Skipping download for {item.id} as marker already exists")
+                cprint(f"Skipping download for {item.id} as marker already exists", 'magenta')
                 return
 
-            print(f"Downloading {item.id} page {item.page_num}")
+            cprint(f"Downloading {item.id} page {item.page_num}", 'cyan')
             try:
                 p = partial(self.aapi.download, url=item.url, path=output_dir, replace=True)
                 self.retry_wrapper(p)
             except Exception:
-                print("Failed to download image...")
+                cprint("Failed to download image...", 'red')
                 traceback.print_exc()
                 return
 
-            print(f"Successfully downloaded image for {item.id}")
+            cprint(f"Successfully downloaded image for {item.id}", 'green')
 
         (self.output_dir / "raw" / str(items[0].id) / "marker.json").write_text(
             json.dumps({"downloaded": arrow.utcnow().isoformat()})
         )
 
-        print(f"Successfully downloaded {item.id}")
+        cprint(f"Successfully downloaded {item.id}", 'green')
 
     @staticmethod
     def make_downloadable(illust: dict) -> List[DownloadableImage]:
@@ -214,16 +218,16 @@ class Downloader(object):
 
         for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
             if not last_id:
-                print("Downloading initial illustrations page...")
+                cprint("Downloading initial illustrations page...", 'cyan')
                 response = self.retry_wrapper(meth)
             else:
-                print(f"Downloading illustrations page after {last_id}")
+                cprint(f"Downloading illustrations page after {last_id}", 'cyan')
                 params = {param_name: last_id}
                 p = partial(meth, **params)
                 response = self.retry_wrapper(p)
 
             illusts = response["illusts"]
-            print(f"Downloaded {len(illusts)} objects (current tally: {len(to_process)})")
+            cprint(f"Downloaded {len(illusts)} objects (current tally: {len(to_process)})", 'green')
             to_process += illusts
 
             if max_items is not None and len(to_process) >= max_items:
@@ -257,7 +261,7 @@ class Downloader(object):
             pass
 
         final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
-        print(f"Linked {final_dir} -> {original_dir}")
+        cprint(f"Linked {final_dir} -> {original_dir}", 'magenta')
 
     def do_download_with_symlinks(self, dest_dir: Path, items: List[DownloadableImage]):
         """
@@ -331,7 +335,7 @@ class Downloader(object):
 
             filtered, msg = self.filter_illust(illust)
             if filtered:
-                print(f"Filtered illustration {id} ({title}): {msg}")
+                cprint(f"Filtered illustration {id} ({title}): {msg}", 'red')
                 continue
 
             raw_dir = self.output_dir / "raw"
@@ -339,9 +343,9 @@ class Downloader(object):
             obs = self.make_downloadable(illust)
             to_dl.append(obs)
 
-            print(
+            cprint(
                 f"Processed metadata for {illust['id']} ({illust['title']}) "
-                f"with {len(obs)} pages"
+                f"with {len(obs)} pages", 'green'
             )
 
         return to_dl
@@ -364,7 +368,7 @@ class Downloader(object):
         # free memory during the download process, we don't need these anymore
         to_process.clear()
 
-        print("Downloading images concurrently...")
+        cprint("Downloading images concurrently...", 'magenta')
         with ThreadPoolExecutor(4) as e:
             return list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
 
@@ -383,23 +387,23 @@ class Downloader(object):
         bookmarks_dir = user_dir / "bookmarks"
         bookmarks_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Downloading info for user {user_id}...")
+        cprint(f"Downloading info for user {user_id}...", 'cyan')
         user_info = self.aapi.user_detail(user_id)
 
         # unfortunately, this doesn't give the nice background image...
         images = user_info["user"]["profile_image_urls"]
         url = images["medium"]
         suffix = url.split(".")[-1]
-        print(f"Saving profile image...")
+        cprint(f"Saving profile image...", 'cyan')
         self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
 
-        print(f"Saving metadata...")
+        cprint(f"Saving metadata...", 'cyan')
         user_info["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
-        print(
+        cprint(
             f"Downloading all works for user {user_id} || {user_info['user']['name']} "
-            f"|| {user_info['user']['account']}"
+            f"|| {user_info['user']['account']}", 'cyan'
         )
 
         # very generic...
@@ -408,12 +412,12 @@ class Downloader(object):
         to_dl_works = self.process_and_save_illusts(to_process_works)
 
         if full:
-            print(f"Downloading all bookmarks for user {user_id}")
+            cprint(f"Downloading all bookmarks for user {user_id}", 'cyan')
             fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
             to_process_bookmarks = self.depaginate_download(fn2)
             to_dl_bookmarks = self.process_and_save_illusts(to_process_bookmarks)
 
-        print("Downloading images concurrently...")
+        cprint("Downloading images concurrently...", 'magenta')
         with ThreadPoolExecutor(4) as e:
             l1 = list(e.map(partial(self.do_download_with_symlinks, works_dir), to_dl_works))
             if full:
@@ -435,7 +439,7 @@ class Downloader(object):
         follow_dir.mkdir(exist_ok=True)
 
         for x in range(0, max_items, 30):
-            print(f"Downloading items {x + 1} - {x + 31}")
+            cprint(f"Downloading items {x + 1} - {x + 31}", 'cyan')
 
             fn = partial(self.aapi.illust_follow)
             to_process = self.depaginate_download(
@@ -447,7 +451,7 @@ class Downloader(object):
 
             to_dl = self.process_and_save_illusts(to_process)
 
-            print("Downloading images concurrently...")
+            cprint("Downloading images concurrently...", 'magenta')
 
             with ThreadPoolExecutor(4) as e:
                 # list() call unwraps errors
@@ -470,7 +474,7 @@ class Downloader(object):
         max_items = min(max_items, 5000)  # pixiv limit :(
 
         for x in range(0, max_items, 30):
-            print(f"Downloading items {x + 1} - {x + 31}")
+            cprint(f"Downloading items {x + 1} - {x + 31}", 'cyan')
 
             fn = partial(self.aapi.search_illust, word=main_tag)
             to_process = self.depaginate_download(
@@ -482,8 +486,7 @@ class Downloader(object):
 
             to_dl = self.process_and_save_illusts(to_process)
 
-            print("Downloading images concurrently...")
-
+            cprint("Downloading images concurrently...", 'magenta')
             with ThreadPoolExecutor(4) as e:
                 list(e.map(partial(self.do_download_with_symlinks, tag_dir), to_dl))
 
@@ -570,16 +573,16 @@ def main():
     token_file = output / "refresh_token"
     if token_file.exists():
         aapi.auth(refresh_token=token_file.read_text())
-        print(f"Successfully logged in with token as {aapi.user_id}")
+        cprint(f"Successfully logged in with token as {aapi.user_id}", 'green')
     else:
         if not args.username or not args.password:
-            print("No refresh token found and no username/password provided, cannot login")
+            cprint("No refresh token found and no username/password provided cannot login", 'red')
             return
 
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
-        print(f"Successfully logged in with username/password as {aapi.user_id}")
+        cprint(f"Successfully logged in with username/password as {aapi.user_id}", 'pink')
 
     if args.filter_tag is None:
         args.filter_tag = []
@@ -600,16 +603,16 @@ def main():
 
     subcommand = args.subcommand
     if subcommand == "bookmarks":
-        print("Downloading all bookmarks...")
+        cprint("Downloading all bookmarks...", 'cyan')
         return dl.download_bookmarks()
     elif subcommand == "following":
-        print("Downloading your following...")
+        cprint("Downloading your following...", 'cyan')
         return dl.download_following(max_items=args.limit)
     elif subcommand == "mirror":
         if args.full:
-            print("Fully mirroring a user...")
+            cprint("Fully mirroring a user...", 'cyan')
         else:
-            print("Mirroring a user...")
+            cprint("Mirroring a user...", 'cyan')
         return dl.mirror_user(args.userid, full=args.full)
     elif subcommand == "tag":
         return dl.download_tag(args.tag, max_items=args.limit)
