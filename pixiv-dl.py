@@ -434,8 +434,8 @@ def main():
         """
         )
     )
-    parser.add_argument("-u", "--username", help="Your pixiv username", required=True)
-    parser.add_argument("-p", "--password", help="Your pixiv password", required=True)
+    parser.add_argument("-u", "--username", help="Your pixiv username")
+    parser.add_argument("-p", "--password", help="Your pixiv password")
     parser.add_argument(
         "-o", "--output", help="The output directory for the command to run", default="./output"
     )
@@ -488,6 +488,10 @@ def main():
         aapi.auth(refresh_token=token_file.read_text())
         print(f"Successfully logged in with token as {aapi.user_id}")
     else:
+        if not args.username or not args.password:
+            print("No refresh token found and no username/password provided, cannot login")
+            return
+
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
