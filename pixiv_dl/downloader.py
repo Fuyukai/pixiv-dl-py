@@ -402,12 +402,14 @@ class Downloader(object):
         user_info["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
-        following = self.depaginate_download(
-            partial(self.aapi.user_following, user_id=user_id),
-            param_name="offset",
-            key_name="user_previews",
-        )
-        (user_dir / "following.json").write_text(json.dumps(following, indent=4))
+        if full:
+            cprint(f"Saving following data...")
+            following = self.depaginate_download(
+                partial(self.aapi.user_following, user_id=user_id),
+                param_name="offset",
+                key_name="user_previews",
+            )
+            (user_dir / "following.json").write_text(json.dumps(following, indent=4))
 
         cprint(
             f"Downloading all works for user {user_id} || {user_info['user']['name']} "
