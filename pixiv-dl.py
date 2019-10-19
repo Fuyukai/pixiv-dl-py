@@ -467,14 +467,24 @@ def main():
 
     args = parser.parse_args()
 
+    output = Path(args.output)
+    output.mkdir(exist_ok=True)
+
     public_api = pixivpy3.PixivAPI()
     public_api.set_accept_language("en-us")
     # ew
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
     print("Authenticating with Pixiv...")
-    aapi.auth(username=args.username, password=args.password)
-    public_api.set_auth(aapi.access_token, aapi.refresh_token)
+    token_file = output / "refresh_token"
+    if token_file.exists():
+       aapi.auth(refresh_token=token_file.read_text())
+       print(f"Successfully logged in with token as {aapi.user_id}")
+    else:
+        aapi.auth(username=args.username, password=args.password)
+        public_api.set_auth(aapi.access_token, aapi.refresh_token)
+        token_file.write_text(aapi.refresh_token)
+        print(f"Successfully logged in with username/password as {aapi.user_id}")
 
     if args.filter_tag is None:
         args.filter_tag = []
@@ -489,10 +499,6 @@ def main():
         filter_tags=set(args.filter_tag),
         required_tags=set(args.require_tag),
     )
-    print(f"Successfully logged in as {aapi.user_id}")
-
-    output = Path(args.output)
-    output.mkdir(exist_ok=True)
 
     subcommand = args.subcommand
     if subcommand == "bookmarks":
