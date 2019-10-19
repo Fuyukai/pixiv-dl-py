@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "pixiv-dl"
 version = "0.1.0"
-description = ""
+description = "A tool to download from pixiv"
 authors = ["Laura F Dickinson <l@veriny.tf>"]
 license = "GPL-3.0-or-later"
+readme = "README.rst"
+repository = "https://github.com/Fuyukai/pixiv-dl"
 
 [tool.poetry.dependencies]
 python = "^3.7"
@@ -13,6 +15,7 @@ termcolor = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
 black = "^19.3b0"
+twine = "^2.0.0"
 
 [tool.poetry.scripts]
 pixiv-dl = 'pixiv_dl.downloader:main'
