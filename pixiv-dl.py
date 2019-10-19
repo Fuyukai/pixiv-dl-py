@@ -322,6 +322,9 @@ class Downloader(object):
         raw = output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
+        bookmark_dir = output_dir / "bookmarks"
+        bookmark_dir.mkdir(exist_ok=True)
+
         fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
         to_process = self.depaginate_download(fn, param_name="max_bookmark_id")
         # downloadable objects, list of lists
@@ -331,7 +334,7 @@ class Downloader(object):
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
-            e.map(partial(self.download_page, raw), to_dl)
+            e.map(partial(self.do_download_with_symlinks, raw, bookmark_dir), to_dl)
 
     def mirror_user(self, output_dir: Path, user_id: int, *, full: bool = False):
         """
