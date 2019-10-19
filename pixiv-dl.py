@@ -147,7 +147,7 @@ class Downloader(object):
     @staticmethod
     def depaginate_download(
         meth,
-        param_name: str = "last_bookmark_id",
+        param_name: str = "max_bookmark_id",
         search_name: str = None,
         max_items: int = None,
         initial_param: Any = None,
@@ -314,6 +314,10 @@ class Downloader(object):
         # the images themselves are downloaded to raw/ but we symlink them into the user dir
         user_dir = output_dir / "users" / str(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
+        works_dir = user_dir / "works"
+        works_dir.mkdir(parents=True, exist_ok=True)
+        bookmarks_dir = user_dir / "bookmarks"
+        bookmarks_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"Downloading info for user {user_id}...")
         user_info = self.aapi.user_detail(user_id)
@@ -336,26 +340,44 @@ class Downloader(object):
 
         # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
-        to_process = self.depaginate_download(fn, param_name="offset")
-        to_dl = self.process_and_save_illusts(raw, to_process)
+        to_process_works = self.depaginate_download(fn, param_name="offset")
+        to_dl_works = self.process_and_save_illusts(raw, to_process_works)
+
+        if full:
+            print(f"Downloading all bookmarks for user {user_id}")
+            fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
+            to_process_bookmarks = self.depaginate_download(fn2)
+            to_dl_bookmarks = self.process_and_save_illusts(raw, to_process_bookmarks)
+            to_dl = to_dl_works + to_dl_bookmarks
+        else:
+            to_dl = to_dl_works
 
         print("Downloading images concurrently...")
         with ThreadPoolExecutor(4) as e:
             e.map(partial(self.download_page, raw), to_dl)
 
         print("Setting up symlinks...")
-        for illust in sorted(to_process, key=lambda i: arrow.get(i["create_date"])):
-            original_dir = raw / str(illust["id"])
-            final_dir = user_dir / str(illust["id"])
-            print(f"Linking {final_dir} -> {original_dir}")
 
-            # no easy way to check if a broken symlink exists other than just... doing this
-            try:
-                final_dir.unlink()
-            except FileNotFoundError:
-                pass
+        def do_symlinks(l, output):
+            for illust in l:
+                original_dir = raw / str(illust["id"])
+                if not original_dir.exists():
+                    continue
 
-            final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
+                final_dir = output / str(illust["id"])
+                print(f"Linking {final_dir} -> {original_dir}")
+
+                # no easy way to check if a broken symlink exists other than just... doing this
+                try:
+                    final_dir.unlink()
+                except FileNotFoundError:
+                    pass
+
+                final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
+
+        do_symlinks(to_process_works, works_dir)
+        if full:
+            do_symlinks(to_process_bookmarks, bookmarks_dir)
 
     def download_following(self, output_dir: Path, max_items: int = 100):
         """
@@ -487,7 +509,10 @@ def main():
         print("Downloading your following...")
         return dl.download_following(output, max_items=args.limit)
     elif subcommand == "mirror":
-        print("Mirroring a user...")
+        if args.full:
+            print("Fully mirroring a user...")
+        else:
+            print("Mirroring a user...")
         return dl.mirror_user(output, args.userid, full=args.full)
     else:
         print(f"Unknown command {subcommand}")
