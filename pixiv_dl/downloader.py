@@ -432,7 +432,9 @@ class Downloader(object):
         with ThreadPoolExecutor(4) as e:
             l1 = list(e.map(partial(self.do_download_with_symlinks, works_dir), to_dl_works))
             if full:
-                l2 = e.map(partial(self.do_download_with_symlinks, bookmarks_dir), to_dl_bookmarks)
+                l2 = list(
+                    e.map(partial(self.do_download_with_symlinks, bookmarks_dir), to_dl_bookmarks)
+                )
                 return l1 + l2
             else:
                 return l1
