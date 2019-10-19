@@ -403,7 +403,7 @@ class Downloader(object):
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
         if full:
-            cprint(f"Saving following data...")
+            cprint(f"Saving following data...", "cyan")
             following = self.depaginate_download(
                 partial(self.aapi.user_following, user_id=user_id),
                 param_name="offset",
@@ -568,6 +568,8 @@ def main():
         "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
 
+    parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
+
     args = parser.parse_args()
 
     output = Path(args.output)
@@ -626,6 +628,8 @@ def main():
     elif subcommand == "tag":
         cprint("Downloading a tag...", "cyan")
         return dl.download_tag(args.tag, max_items=args.limit)
+    elif subcommand == "auth":
+        pass
     else:
         cprint(f"Unknown command {subcommand}", "red")
 
