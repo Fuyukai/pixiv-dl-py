@@ -591,7 +591,7 @@ def main():
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
-        cprint(f"Successfully logged in with username/password as {aapi.user_id}", "pink")
+        cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
 
     if args.filter_tag is None:
         args.filter_tag = []
