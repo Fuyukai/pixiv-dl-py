@@ -10,7 +10,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import List, Set, Any
+from typing import List, Set, Any, Tuple
 
 import arrow
 import pixivpy3
@@ -223,6 +223,43 @@ class Downloader(object):
         self.download_page(items)
         self.do_symlinks(raw_dir, dest_dir, items[0].id)
 
+    def filter_illust(self, illust) -> Tuple[bool, str]:
+        """
+        Filters an illustration based on the criteria.
+        """
+        # clever! we only set msg if we can't filter.
+        # so we can simply `return msg is not None, msg`
+        msg = None
+
+        # useful values so we dont type these over again
+        lewd_level = illust["sanity_level"]
+        tags = set()
+        for td in illust["tags"]:
+            tags.update(set(td.values()))
+
+        filtered = tags.intersection(self.filtered_tags)
+        required = tags.intersection(self.required_tags)
+
+        if not illust['visible']:
+            msg = "Illustration is not visible"
+
+        elif illust["x_restrict"] and not self.allow_r18:
+            msg = "Illustration is R-18"
+
+        elif lewd_level < self.lewd_limits[0]:
+            msg = f"Illustration lewd level ({lewd_level}) is below minimum lewd level"
+
+        elif lewd_level > self.lewd_limits[1]:
+            msg = f"Illustration lewd level ({lewd_level}) is above maximum lewd level"
+
+        elif self.filtered_tags and filtered:
+            msg = f"Illustration contains filtered tags {filtered}"
+
+        elif self.required_tags and not required:
+            msg = f"Illustration missing any of the required tags {self.required_tags}"
+
+        return msg is not None, msg
+
     def process_and_save_illusts(
         self, illusts: List[dict], silent: bool = False
     ) -> List[List[DownloadableImage]]:
@@ -237,72 +274,10 @@ class Downloader(object):
         for illust in illusts:
             id = illust["id"]
             title = illust["title"]
-            lewd_level = illust["sanity_level"]
 
-            # visibility check
-            if not illust["visible"]:
-                if not silent:
-                    msg = f"Skipping illustration {id} because it is not marked as visible!"
-                    print(msg)
-
-                continue
-
-            # R-18 tag
-            if illust["x_restrict"] and not self.allow_r18:
-                if not silent:
-                    msg = f"Skipping R-18 illustration {illust['id']} ({illust['title']})"
-                    print(msg)
-
-                continue
-
-            # granular sfw checks
-            if lewd_level < self.lewd_limits[0]:
-                if not silent:
-                    msg = (
-                        f"Skipping illustation {id} ({title}): "
-                        f"lewd level of {lewd_level} is below limit"
-                    )
-                    print(msg)
-
-                continue
-
-            if lewd_level > self.lewd_limits[1]:
-                if not silent:
-                    msg = (
-                        f"Skipping illustation {id} ({title}): "
-                        f"lewd level of {lewd_level} is above limit"
-                    )
-                    print(msg)
-
-                continue
-
-            # verify tags
-            tags = set()
-            for td in illust["tags"]:
-                tags.update(set(td.values()))
-
-            # note to self: self if check is to ensure that we don't do a tag filter if we don't
-            # need to.
-            filtered = tags.intersection(self.filtered_tags)
-            if self.filtered_tags and filtered:
-                if not silent:
-                    msg = (
-                        f"Skipping illustration {illust['id']} ({illust['title']}) "
-                        f"as it has filtered tags: {filtered}"
-                    )
-                    print(msg)
-
-                continue
-
-            required = tags.intersection(self.required_tags)
-            if self.required_tags and not required:
-                if not silent:
-                    msg = (
-                        f"Skipping illustration {illust['id']} ({illust['title']}) "
-                        f"as it has none of the required tags: {self.required_tags}"
-                    )
-                    print(msg)
-
+            filtered, msg = self.filter_illust(illust)
+            if filtered:
+                print(f"Filtered illustration {id} ({title}): {msg}")
                 continue
 
             raw_dir = self.output_dir / "raw"
@@ -310,11 +285,10 @@ class Downloader(object):
             obs = self.make_downloadable(illust)
             to_dl.append(obs)
 
-            if not silent:
-                print(
-                    f"Processed metadata for {illust['id']} ({illust['title']}) "
-                    f"with {len(obs)} pages"
-                )
+            print(
+                f"Processed metadata for {illust['id']} ({illust['title']}) "
+                f"with {len(obs)} pages"
+            )
 
         return to_dl
 
