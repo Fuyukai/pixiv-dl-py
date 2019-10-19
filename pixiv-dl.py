@@ -478,8 +478,8 @@ def main():
     print("Authenticating with Pixiv...")
     token_file = output / "refresh_token"
     if token_file.exists():
-       aapi.auth(refresh_token=token_file.read_text())
-       print(f"Successfully logged in with token as {aapi.user_id}")
+        aapi.auth(refresh_token=token_file.read_text())
+        print(f"Successfully logged in with token as {aapi.user_id}")
     else:
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
