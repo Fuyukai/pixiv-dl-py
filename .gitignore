@@ -127,7 +127,7 @@ dmypy.json
 
 ## custom
 # test dir
-output/
+output*/
 
 # poetry
 .venv/
