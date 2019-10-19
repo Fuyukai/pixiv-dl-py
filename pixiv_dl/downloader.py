@@ -23,6 +23,7 @@ from termcolor import colored as coloured
 # https://github.com/yellowbluesky/PixivforMuzei3/blob/master/app/src/main/java/com/antony/muzei
 # /pixiv/PixivArtWorker.java#L503
 
+
 def cprint(msg: str, colour: str):
     return print(coloured(msg, colour))
 
@@ -41,17 +42,17 @@ class DownloadableImage:
 
 class Downloader(object):
     def __init__(
-            self,
-            aapi: pixivpy3.AppPixivAPI,
-            papi: pixivpy3.PixivAPI,
-            output_dir: Path,
-            *,
-            allow_r18: bool = False,
-            lewd_limits=(0, 6),
-            filter_tags: Set[str] = None,
-            required_tags: Set[str] = None,
-            bookmark_limits: Tuple[int, int] = None,
-            max_pages: int = None,
+        self,
+        aapi: pixivpy3.AppPixivAPI,
+        papi: pixivpy3.PixivAPI,
+        output_dir: Path,
+        *,
+        allow_r18: bool = False,
+        lewd_limits=(0, 6),
+        filter_tags: Set[str] = None,
+        required_tags: Set[str] = None,
+        bookmark_limits: Tuple[int, int] = None,
+        max_pages: int = None,
     ):
         """
         :param aapi: The Pixiv app API interface.
@@ -93,15 +94,15 @@ class Downloader(object):
             try:
                 res = cbl()
             except PixivError as e:
-                if 'connection aborted' in str(e):
+                if "connection aborted" in str(e):
                     # ignore
                     continue
 
                 raise
 
             # check for login
-            if res is not None and 'error' in res:
-                if 'invalid_grant' not in res['error']['message']:
+            if res is not None and "error" in res:
+                if "invalid_grant" not in res["error"]["message"]:
                     pprint(res)
                     raise Exception("Unknown error")
                 # re-auths with the refresh token and retries
@@ -124,25 +125,25 @@ class Downloader(object):
             marker = output_dir / "marker.json"
 
             if marker.exists():
-                cprint(f"Skipping download for {item.id} as marker already exists", 'magenta')
+                cprint(f"Skipping download for {item.id} as marker already exists", "magenta")
                 return
 
-            cprint(f"Downloading {item.id} page {item.page_num}", 'cyan')
+            cprint(f"Downloading {item.id} page {item.page_num}", "cyan")
             try:
                 p = partial(self.aapi.download, url=item.url, path=output_dir, replace=True)
                 self.retry_wrapper(p)
             except Exception:
-                cprint("Failed to download image...", 'red')
+                cprint("Failed to download image...", "red")
                 traceback.print_exc()
                 return
 
-            cprint(f"Successfully downloaded image for {item.id}", 'green')
+            cprint(f"Successfully downloaded image for {item.id}", "green")
 
         (self.output_dir / "raw" / str(items[0].id) / "marker.json").write_text(
             json.dumps({"downloaded": arrow.utcnow().isoformat()})
         )
 
-        cprint(f"Successfully downloaded {item.id}", 'green')
+        cprint(f"Successfully downloaded {item.id}", "green")
 
     @staticmethod
     def make_downloadable(illust: dict) -> List[DownloadableImage]:
@@ -184,7 +185,7 @@ class Downloader(object):
         illust["_meta"] = {
             "download-date": arrow.utcnow().isoformat(),
             "tool": "pixiv-dl",
-            "weblink": f"https://pixiv.net/en/artworks/{illust_id}"
+            "weblink": f"https://pixiv.net/en/artworks/{illust_id}",
         }
 
         # the actual location
@@ -195,40 +196,39 @@ class Downloader(object):
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
 
     def depaginate_download(
-            self,
-            meth,
-            param_name: str = "max_bookmark_id",
-            search_name: str = None,
-            max_items: int = None,
-            initial_param: Any = None,
+        self,
+        meth,
+        param_name: str = "max_bookmark_id",
+        key_name: str = "illusts",
+        max_items: int = None,
+        initial_param: Any = None,
     ):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
         :param param_name: The param name to use for paginating.
-        :param search_name: The search name to use in the regexp.
+        :param key_name: The key name to use for unpacking the objects.
         :param max_items: The maximum items to depaginate.
         :param initial_param: The initial offset to depaginate.
         """
-        if search_name is None:
-            search_name = param_name
+        search_name = param_name
 
         last_id = initial_param
         to_process = []
 
         for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
             if not last_id:
-                cprint("Downloading initial illustrations page...", 'cyan')
+                cprint("Downloading initial page...", "cyan")
                 response = self.retry_wrapper(meth)
             else:
-                cprint(f"Downloading illustrations page after {last_id}", 'cyan')
+                cprint(f"Downloading page after {last_id}...", "cyan")
                 params = {param_name: last_id}
                 p = partial(meth, **params)
                 response = self.retry_wrapper(p)
 
-            illusts = response["illusts"]
-            cprint(f"Downloaded {len(illusts)} objects (current tally: {len(to_process)})", 'green')
-            to_process += illusts
+            obbs = response[key_name]
+            cprint(f"Downloaded {len(obbs)} objects (current tally: {len(to_process)})", "green")
+            to_process += obbs
 
             if max_items is not None and len(to_process) >= max_items:
                 break
@@ -261,7 +261,7 @@ class Downloader(object):
             pass
 
         final_dir.symlink_to(original_dir.resolve(), target_is_directory=True)
-        cprint(f"Linked {final_dir} -> {original_dir}", 'magenta')
+        cprint(f"Linked {final_dir} -> {original_dir}", "magenta")
 
     def do_download_with_symlinks(self, dest_dir: Path, items: List[DownloadableImage]):
         """
@@ -287,9 +287,9 @@ class Downloader(object):
 
         filtered = tags.intersection(self.filtered_tags)
         required = tags.intersection(self.required_tags)
-        bookmarks = illust['total_bookmarks']
+        bookmarks = illust["total_bookmarks"]
 
-        if not illust['visible']:
+        if not illust["visible"]:
             msg = "Illustration is not visible"
 
         elif illust["x_restrict"] and not self.allow_r18:
@@ -319,7 +319,7 @@ class Downloader(object):
         return msg is not None, msg
 
     def process_and_save_illusts(
-            self, illusts: List[dict], silent: bool = False
+        self, illusts: List[dict], silent: bool = False
     ) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
@@ -335,7 +335,7 @@ class Downloader(object):
 
             filtered, msg = self.filter_illust(illust)
             if filtered:
-                cprint(f"Filtered illustration {id} ({title}): {msg}", 'red')
+                cprint(f"Filtered illustration {id} ({title}): {msg}", "red")
                 continue
 
             raw_dir = self.output_dir / "raw"
@@ -345,7 +345,8 @@ class Downloader(object):
 
             cprint(
                 f"Processed metadata for {illust['id']} ({illust['title']}) "
-                f"with {len(obs)} pages", 'green'
+                f"with {len(obs)} pages",
+                "green",
             )
 
         return to_dl
@@ -368,7 +369,7 @@ class Downloader(object):
         # free memory during the download process, we don't need these anymore
         to_process.clear()
 
-        cprint("Downloading images concurrently...", 'magenta')
+        cprint("Downloading images concurrently...", "magenta")
         with ThreadPoolExecutor(4) as e:
             return list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
 
@@ -387,23 +388,31 @@ class Downloader(object):
         bookmarks_dir = user_dir / "bookmarks"
         bookmarks_dir.mkdir(parents=True, exist_ok=True)
 
-        cprint(f"Downloading info for user {user_id}...", 'cyan')
+        cprint(f"Downloading info for user {user_id}...", "cyan")
         user_info = self.aapi.user_detail(user_id)
 
         # unfortunately, this doesn't give the nice background image...
         images = user_info["user"]["profile_image_urls"]
         url = images["medium"]
         suffix = url.split(".")[-1]
-        cprint(f"Saving profile image...", 'cyan')
+        cprint(f"Saving profile image...", "cyan")
         self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
 
-        cprint(f"Saving metadata...", 'cyan')
+        cprint(f"Saving metadata...", "cyan")
         user_info["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
+        following = self.depaginate_download(
+            partial(self.aapi.user_following, user_id=user_id),
+            param_name="offset",
+            key_name="user_previews",
+        )
+        (user_dir / "following.json").write_text(json.dumps(following, indent=4))
+
         cprint(
             f"Downloading all works for user {user_id} || {user_info['user']['name']} "
-            f"|| {user_info['user']['account']}", 'cyan'
+            f"|| {user_info['user']['account']}",
+            "cyan",
         )
 
         # very generic...
@@ -412,12 +421,12 @@ class Downloader(object):
         to_dl_works = self.process_and_save_illusts(to_process_works)
 
         if full:
-            cprint(f"Downloading all bookmarks for user {user_id}", 'cyan')
+            cprint(f"Downloading all bookmarks for user {user_id}", "cyan")
             fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
             to_process_bookmarks = self.depaginate_download(fn2)
             to_dl_bookmarks = self.process_and_save_illusts(to_process_bookmarks)
 
-        cprint("Downloading images concurrently...", 'magenta')
+        cprint("Downloading images concurrently...", "magenta")
         with ThreadPoolExecutor(4) as e:
             l1 = list(e.map(partial(self.do_download_with_symlinks, works_dir), to_dl_works))
             if full:
@@ -439,7 +448,7 @@ class Downloader(object):
         follow_dir.mkdir(exist_ok=True)
 
         for x in range(0, max_items, 30):
-            cprint(f"Downloading items {x + 1} - {x + 31}", 'cyan')
+            cprint(f"Downloading items {x + 1} - {x + 31}", "cyan")
 
             fn = partial(self.aapi.illust_follow)
             to_process = self.depaginate_download(
@@ -451,7 +460,7 @@ class Downloader(object):
 
             to_dl = self.process_and_save_illusts(to_process)
 
-            cprint("Downloading images concurrently...", 'magenta')
+            cprint("Downloading images concurrently...", "magenta")
 
             with ThreadPoolExecutor(4) as e:
                 # list() call unwraps errors
@@ -474,7 +483,7 @@ class Downloader(object):
         max_items = min(max_items, 5000)  # pixiv limit :(
 
         for x in range(0, max_items, 30):
-            cprint(f"Downloading items {x + 1} - {x + 31}", 'cyan')
+            cprint(f"Downloading items {x + 1} - {x + 31}", "cyan")
 
             fn = partial(self.aapi.search_illust, word=main_tag)
             to_process = self.depaginate_download(
@@ -486,7 +495,7 @@ class Downloader(object):
 
             to_dl = self.process_and_save_illusts(to_process)
 
-            cprint("Downloading images concurrently...", 'magenta')
+            cprint("Downloading images concurrently...", "magenta")
             with ThreadPoolExecutor(4) as e:
                 list(e.map(partial(self.do_download_with_symlinks, tag_dir), to_dl))
 
@@ -527,9 +536,7 @@ def main():
         "--max-bookmarks", type=int, default=None, help="Maximum number of bookmarks"
     )
 
-    parser.add_argument(
-        "--max-pages", type=int, default=None, help="Maximum number of pages"
-    )
+    parser.add_argument("--max-pages", type=int, default=None, help="Maximum number of pages")
 
     parsers = parser.add_subparsers(dest="subcommand")
 
@@ -569,20 +576,20 @@ def main():
     # ew
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
-    cprint("Authenticating with Pixiv...", 'cyan')
+    cprint("Authenticating with Pixiv...", "cyan")
     token_file = output / "refresh_token"
     if token_file.exists():
         aapi.auth(refresh_token=token_file.read_text())
-        cprint(f"Successfully logged in with token as {aapi.user_id}", 'green')
+        cprint(f"Successfully logged in with token as {aapi.user_id}", "green")
     else:
         if not args.username or not args.password:
-            cprint("No refresh token found and no username/password provided cannot login", 'red')
+            cprint("No refresh token found and no username/password provided cannot login", "red")
             return
 
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
-        cprint(f"Successfully logged in with username/password as {aapi.user_id}", 'pink')
+        cprint(f"Successfully logged in with username/password as {aapi.user_id}", "pink")
 
     if args.filter_tag is None:
         args.filter_tag = []
@@ -603,22 +610,22 @@ def main():
 
     subcommand = args.subcommand
     if subcommand == "bookmarks":
-        cprint("Downloading all bookmarks...", 'cyan')
+        cprint("Downloading all bookmarks...", "cyan")
         return dl.download_bookmarks()
     elif subcommand == "following":
-        cprint("Downloading your following...", 'cyan')
+        cprint("Downloading your following...", "cyan")
         return dl.download_following(max_items=args.limit)
     elif subcommand == "mirror":
         if args.full:
-            cprint("Fully mirroring a user...", 'cyan')
+            cprint("Fully mirroring a user...", "cyan")
         else:
-            cprint("Mirroring a user...", 'cyan')
+            cprint("Mirroring a user...", "cyan")
         return dl.mirror_user(args.userid, full=args.full)
     elif subcommand == "tag":
-        cprint("Downloading a tag...", 'cyan')
+        cprint("Downloading a tag...", "cyan")
         return dl.download_tag(args.tag, max_items=args.limit)
     else:
-        cprint(f"Unknown command {subcommand}", 'red')
+        cprint(f"Unknown command {subcommand}", "red")
 
 
 if __name__ == "__main__":
