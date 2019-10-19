@@ -569,7 +569,7 @@ def main():
     # ew
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
-    print("Authenticating with Pixiv...")
+    cprint("Authenticating with Pixiv...", 'cyan')
     token_file = output / "refresh_token"
     if token_file.exists():
         aapi.auth(refresh_token=token_file.read_text())
@@ -615,9 +615,10 @@ def main():
             cprint("Mirroring a user...", 'cyan')
         return dl.mirror_user(args.userid, full=args.full)
     elif subcommand == "tag":
+        cprint("Downloading a tag...", 'cyan')
         return dl.download_tag(args.tag, max_items=args.limit)
     else:
-        print(f"Unknown command {subcommand}")
+        cprint(f"Unknown command {subcommand}", 'red')
 
 
 if __name__ == "__main__":
