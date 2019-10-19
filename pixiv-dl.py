@@ -141,9 +141,13 @@ class Downloader(object):
         """
         Stores the metadata for a specified illustration.
         """
-        illust["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
-
         illust_id = illust["id"]
+        illust["_meta"] = {
+            "download-date": arrow.utcnow().isoformat(),
+            "tool": "pixiv-dl",
+            "weblink": f"https://pixiv.net/en/artworks/{illust_id}"
+        }
+
         # the actual location
         subdir = output_dir / str(illust_id)
         subdir.mkdir(exist_ok=True)
@@ -407,7 +411,43 @@ class Downloader(object):
             print("Downloading images concurrently...")
 
             with ThreadPoolExecutor(4) as e:
-                return list(e.map(partial(self.do_download_with_symlinks, follow_dir), to_dl))
+                # list() call unwraps errors
+                list(e.map(partial(self.do_download_with_symlinks, follow_dir), to_dl))
+
+    def download_tag(self, main_tag: str):
+        """
+        Downloads all items for a tag.
+        """
+        raw = self.output_dir / "raw"
+        raw.mkdir(exist_ok=True)
+
+        tags_dir = self.output_dir / "tags"
+        tags_dir.mkdir(exist_ok=True)
+
+        # no plural, this is the singular tag
+        tag_dir = tags_dir / main_tag
+        tag_dir.mkdir(exist_ok=True)
+
+        # todo
+        max_items = 1000
+
+        for x in range(0, max_items, 30):
+            print(f"Downloading items {x + 1} - {x + 31}")
+
+            fn = partial(self.aapi.search_illust, word=main_tag)
+            to_process = self.depaginate_download(
+                fn, max_items=30, param_name="offset", initial_param=x
+            )
+            # no more to DL
+            if len(to_process) == 0:
+                return
+
+            to_dl = self.process_and_save_illusts(to_process)
+
+            print("Downloading images concurrently...")
+
+            with ThreadPoolExecutor(4) as e:
+                list(e.map(partial(self.do_download_with_symlinks, tag_dir), to_dl))
 
 
 def main():
@@ -467,6 +507,10 @@ def main():
         help="If this should also " "mirror all their bookmarks",
     )
 
+    # tag mode
+    tag_mode = parsers.add_parser("tag", help="Download works with a tag")
+    tag_mode.add_argument("tag", help="The main tag to filter by")
+
     args = parser.parse_args()
 
     output = Path(args.output)
@@ -521,6 +565,8 @@ def main():
         else:
             print("Mirroring a user...")
         return dl.mirror_user(args.userid, full=args.full)
+    elif subcommand == "tag":
+        return dl.download_tag(args.tag)
     else:
         print(f"Unknown command {subcommand}")
 
