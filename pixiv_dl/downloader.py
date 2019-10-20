@@ -535,7 +535,7 @@ def main():
     parser.add_argument("-u", "--username", help="Your pixiv username")
     parser.add_argument("-p", "--password", help="Your pixiv password")
     parser.add_argument(
-        "-o", "--output", help="The output directory for the command to run", default="./output"
+        "-d", "--db", help="The local db directory for the command to run", default="./output"
     )
 
     parser.add_argument(
