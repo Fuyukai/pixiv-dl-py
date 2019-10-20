@@ -53,7 +53,5 @@ def get_config_in(dir: Path):
     return tomlkit.parse(file.read_text())
 
 
-
-
 if __name__ == "__main__":
     main()
