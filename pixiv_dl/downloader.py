@@ -43,6 +43,7 @@ class Downloader(object):
         aapi: pixivpy3.AppPixivAPI,
         papi: pixivpy3.PixivAPI,
         output_dir: Path,
+        config,
         *,
         allow_r18: bool = False,
         lewd_limits=(0, 6),
@@ -55,6 +56,7 @@ class Downloader(object):
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
         :param output_dir: The output directory.
+        :param config: The downloader-specific config.
 
         Behaviour params:
         :param allow_r18: If R-18 content should be downloaded, too.
@@ -71,6 +73,7 @@ class Downloader(object):
         self.aapi = aapi
         self.papi = papi
         self.output_dir = output_dir
+        self.config = config
 
         self.allow_r18 = allow_r18
         self.allow_r18 = allow_r18
@@ -82,6 +85,8 @@ class Downloader(object):
         self.bookmark_limits = bookmark_limits
 
         self.max_pages = max_pages
+
+        self.should_filter = True
 
     def get_formatted_info(self) -> str:
         """
@@ -303,30 +308,30 @@ class Downloader(object):
 
         if not illust["visible"]:
             msg = "Illustration is not visible"
+        elif self.should_filter:
+            if illust["x_restrict"] and not self.allow_r18:
+                msg = "Illustration is R-18"
 
-        elif illust["x_restrict"] and not self.allow_r18:
-            msg = "Illustration is R-18"
+            elif self.lewd_limits[0] is not None and lewd_level < self.lewd_limits[0]:
+                msg = f"Illustration lewd level ({lewd_level}) is below minimum lewd level"
 
-        elif self.lewd_limits[0] is not None and lewd_level < self.lewd_limits[0]:
-            msg = f"Illustration lewd level ({lewd_level}) is below minimum lewd level"
+            elif self.lewd_limits[1] is not None and lewd_level > self.lewd_limits[1]:
+                msg = f"Illustration lewd level ({lewd_level}) is above maximum lewd level"
 
-        elif self.lewd_limits[1] is not None and lewd_level > self.lewd_limits[1]:
-            msg = f"Illustration lewd level ({lewd_level}) is above maximum lewd level"
+            elif self.filtered_tags and filtered:
+                msg = f"Illustration contains filtered tags {filtered}"
 
-        elif self.filtered_tags and filtered:
-            msg = f"Illustration contains filtered tags {filtered}"
+            elif self.required_tags and not required:
+                msg = f"Illustration missing any of the required tags {self.required_tags}"
 
-        elif self.required_tags and not required:
-            msg = f"Illustration missing any of the required tags {self.required_tags}"
+            elif self.bookmark_limits[1] is not None and self.bookmark_limits[1] < bookmarks:
+                msg = f"Illustration has too many bookmarks ({bookmarks})"
 
-        elif self.bookmark_limits[1] is not None and self.bookmark_limits[1] < bookmarks:
-            msg = f"Illustration has too many bookmarks ({bookmarks})"
+            elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
+                msg = f"Illustration doesn't have enough bookmarks ({bookmarks})"
 
-        elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
-            msg = f"Illustration doesn't have enough bookmarks ({bookmarks})"
-
-        elif self.max_pages is not None and len(illust["meta_pages"]) > self.max_pages:
-            msg = f"Illustration has too many pages"
+            elif self.max_pages is not None and len(illust["meta_pages"]) > self.max_pages:
+                msg = f"Illustration has too many pages"
 
         return msg is not None, msg
 
@@ -367,6 +372,8 @@ class Downloader(object):
         """
         Downloads the bookmarks for this user.
         """
+        self.should_filter = self.config.get("filter_bookmarks", False)
+
         # set up the output dirs
         raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
@@ -640,15 +647,23 @@ def main():
             setattr(args, field, defaults.get(field))
 
     # make sure to make these emtpy lists
+    default_filters = defaults.get("filtered_tags", [])
     if args.filter_tag is None:
-        args.filter_tag = defaults.get("filtered_tags", [])
+        args.filter_tag = default_filters
+    else:
+        args.filter_tag += default_filters
+
+    default_requires = defaults.get("required_tags", [])
     if args.require_tag is None:
-        args.require_tag = defaults.get("required_tags", [])
+        args.require_tag = default_requires
+    else:
+        args.require_tag += default_requires
 
     dl = Downloader(
         aapi,
         public_api,
         output,
+        config=config['config']['downloader'],
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
         filter_tags=set(x.lower() for x in args.filter_tag),

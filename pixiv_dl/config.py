@@ -2,7 +2,6 @@
 Configuration tool for pixiv-dl. Allows loading default options (such as filtered tags, limits,
 etc).
 """
-import argparse
 from pathlib import Path
 
 import tomlkit
@@ -35,6 +34,11 @@ default_config = """# Default values to load so you don't have to constantly re-
 ## Default bookmark level controls.
 # min_bookmarks = 10
 # max_bookmarks = 100
+
+[config.downloader]
+## If the defaults specified above should apply to your bookmarks.
+## This is a setting because, well, it doesn't make much sense to filter your bookmarks...
+filter_bookmarks = false 
 """
 
 
@@ -49,12 +53,6 @@ def get_config_in(dir: Path):
     return tomlkit.parse(file.read_text())
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="A config tool to provide default values for " "pixiv-dl."
-    )
-
-    parser.add_argument("-o", "--output", help="The output directory", default="./output")
 
 
 if __name__ == "__main__":
