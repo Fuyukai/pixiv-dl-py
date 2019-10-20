@@ -42,17 +42,17 @@ class BasicFieldFilterer(FilterRule):
     """
 
     def __init__(
-        self, field: str, value: Any, *, negative: bool = False, custom_message: str = None
+        self, field: str, value: Any, *, invert: bool = False, custom_message: str = None
     ):
         """
         :param field: The field to filter.
         :param value: The value to check.
-        :param negative: If this should be a negative field - i.e. True if field != value.
+        :param invert: If this should be a negative field - i.e. True if field != value.
         :param custom_message: If there is a custom message.
         """
         self._field = field
         self.value = value
-        self.negative = negative
+        self.invert = invert
         self.custom_message = custom_message
 
     @property
@@ -64,13 +64,16 @@ class BasicFieldFilterer(FilterRule):
         if self.custom_message:
             return self.custom_message.format()
 
-        return f"The value `{self.value}` did match the illustation's {self.field}"
+        if self.invert:
+            return f"The value `{self.value}` did not match the illustation's {self.field}"
+        else:
+            return f"The value `{self.value}` matched the illustration's {self.field}"
 
     def filter(self, value: Any) -> bool:
         # clever!!
         # if negative is False, then == should be not False so it should be True
         # if negative is True, then == should be not True so it should be False
-        return (value == self.value) is not self.negative
+        return (value == self.value) is not self.invert
 
 
 class TagFilterer(FilterRule):
@@ -80,16 +83,20 @@ class TagFilterer(FilterRule):
 
     field = "tags"
 
-    def __init__(self, tag: str, *, exclude: bool = False):
+    def __init__(self, tag: str, *, invert: bool = False):
         """
         :param tag: The tag to filter.
-        :param exclude: If this should work in reverse mode and exclude the tag instead.
+        :param invert: If this should work in reverse mode and exclude the tag instead.
         """
-        self.tag = tag
+        self.tag = tag.lower()
+        self.invert = invert
 
     @property
     def message(self) -> str:
-        return f"Tag not found: {self.tag}"
+        if self.invert:
+            return f"Unwanted tag found: {self.tag}"
+        else:
+            return f"Tag not found: {self.tag}"
 
     def filter(self, value: Any) -> bool:
         # annoying tags...
@@ -97,7 +104,35 @@ class TagFilterer(FilterRule):
         for td in value:
             tags.update(set(x.lower() for x in td.values() if x))
 
-        return self.tag.lower() in tags
+        if self.invert:
+            return self.tag not in tags
+        else:
+            return self.tag in tags
+
+
+class UserFilterer(FilterRule):
+    """
+    Filters by a user.
+    """
+    field = "user"
+
+    def __init__(self, user_id: int, *, invert: bool = False):
+        self.user_id = user_id
+        self.invert = invert
+
+    def filter(self, value: Any) -> bool:
+        user_id = value['id']
+        if self.invert:
+            return user_id == self.user_id
+        else:
+            return user_id != self.user_id
+
+    @property
+    def message(self) -> str:
+        if self.invert:
+            return f"Not posted by {self.user_id}"
+        else:
+            return f"Posted by {self.user_id}"
 
 
 class Filterer(object):
@@ -195,22 +230,28 @@ def main():
         default=False,
     )
 
-    # filter controls
+    # generic parser
     parser.add_argument(
-        "--filter-field", help="Adds a filter on a field", action="append", default=[]
+        "--require-field", help="Adds a filter on a field", action="append", default=[]
     )
-    parser.add_argument("--filter-tag", help="Adds a filter on a tag", action="append", default=[])
+
+    # tags
+    parser.add_argument("--require-tag", help="Requires a tag", action="append", default=[])
+    parser.add_argument("--exclude-tag", help="Excludes a tag", action="append", default=[])
 
     r18_group = parser.add_mutually_exclusive_group()
     r18_group.add_argument(
-        "--filter-r18", help="Adds a filter for all R-18 content", action="store_true"
-    )
-    r18_group.add_argument(
-        "--filter-not-r18", help="Adds a filter for all non R-18 content", action="store_true"
+        "--require-r18", help="Requires R-18 content", action="store_true"
     )  # for the ultimate in porn downloading
+    r18_group.add_argument(
+        "--exclude-r18", help="Excludes R-18 content", action="store_true"
+    )
 
     parser.add_argument(
-        "--filter-user", help="Adds a filter on a user", type=int, action="append", default=[]
+        "--require-user", help="Requires a user ID", type=int, action="append", default=[]
+    )
+    parser.add_argument(
+        "--exclude-user", help="Excludes a user ID", type=int, action="append", default=[]
     )
 
     args = parser.parse_args()
@@ -228,23 +269,38 @@ def main():
     filterer = Filterer(subdir)
 
     # build all the rulees
-    for simple_rule in args.filter_field:
+    for simple_rule in args.require_field:
+        cprint(f"Adding filter rule for {simple_rule}")
         field, value = simple_rule.split("=", 1)
         filterer.add_rule(BasicFieldFilterer(field, value))
 
-    if args.filter_r18:
+    for user in args.require_user:
+        cprint(f"Adding required user {user}")
+        filterer.add_rule(UserFilterer(user))
+    for user in args.exclude_user:
+        cprint(f"Adding excluded user {user}")
+        filterer.add_rule(UserFilterer(user, invert=True))
+
+    if args.require_r18:
+        cprint(f"Adding required R-18 rule")
         filterer.add_rule(
             BasicFieldFilterer(
-                "x_restrict", 0, negative=True, custom_message="Illustration is not R-18"
+                "x_restrict", 0, invert=True, custom_message="Illustration is not R-18"
             )
         )
-    elif args.filter_not_r18:
+
+    elif args.exclude_r18:
+        cprint(f"Adding required non R-18 rule")
         filterer.add_rule(
-            BasicFieldFilterer("x_restrict", 0, custom_message="Illustration is " "R-18")
+            BasicFieldFilterer("x_restrict", 0, custom_message="Illustration is R-18")
         )
 
-    for tag in args.filter_tag:
+    for tag in args.require_tag:
+        cprint(f"Adding required tag {tag}")
         filterer.add_rule(TagFilterer(tag))
+    for tag in args.exclude_tag:
+        cprint(f"Adding excluded tag {tag}")
+        filterer.add_rule(TagFilterer(tag, invert=True))
 
     filterer.symlink_filtered(output_dir, suppress_filter_messages=args.suppress_extra)
 
