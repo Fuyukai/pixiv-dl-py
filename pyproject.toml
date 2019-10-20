@@ -25,6 +25,7 @@ twine = "^2.0.0"
 
 [tool.poetry.scripts]
 pixiv-dl = 'pixiv_dl.downloader:main'
+pixiv-filter = 'pixiv_dl.filter:main'
 
 [tool.black]
 line-length = 100
