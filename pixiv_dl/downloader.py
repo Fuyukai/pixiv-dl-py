@@ -93,9 +93,9 @@ class Downloader(object):
             f"  bookmark limits: max={self.bookmark_limits[1]}, min={self.bookmark_limits[0]}",
             f"  filtered tags: {self.filtered_tags}",
             f"  required tags: {self.required_tags}",
-            f"  max pages: {self.max_pages}"
+            f"  max pages: {self.max_pages}",
         ]
-        return '\n'.join(msgs)
+        return "\n".join(msgs)
 
     def retry_wrapper(self, cbl):
         """
@@ -537,28 +537,30 @@ def main():
 
     # defaults: 0, 6
     parser.add_argument(
-        "--min-lewd-level", type=int, help="The minimum 'lewd level'",
+        "--min-lewd-level", type=int, help="The minimum 'lewd level'", required=False
+    )
+    parser.add_argument(
+        "--max-lewd-level", type=int, help="The maximum 'lewd level'", required=False
+    )
+
+    parser.add_argument(
+        "--filter-tag",
+        action="append",
+        help="Ignore any illustrations with this tag",
         required=False,
     )
     parser.add_argument(
-        "--max-lewd-level", type=int, help="The maximum 'lewd level'",
+        "--require-tag",
+        action="append",
+        help="Require illustrations to have this tag",
         required=False,
     )
 
     parser.add_argument(
-        "--filter-tag", action="append", help="Ignore any illustrations with this tag",
-        required=False,
-    )
-    parser.add_argument(
-        "--require-tag", action="append", help="Require illustrations to have this tag",
-        required=False,
-    )
-
-    parser.add_argument(
-        "--min-bookmarks", type=int, help="Minimum number of bookmarks", required=False,
+        "--min-bookmarks", type=int, help="Minimum number of bookmarks", required=False
     )
     parser.add_argument(  # i have no idea when this will ever be useful, but symmetry
-        "--max-bookmarks", type=int, help="Maximum number of bookmarks", required=False,
+        "--max-bookmarks", type=int, help="Maximum number of bookmarks", required=False
     )
 
     parser.add_argument("--max-pages", type=int, help="Maximum number of pages", required=False)
@@ -598,7 +600,7 @@ def main():
     output = Path(args.output)
     output.mkdir(exist_ok=True)
     config = get_config_in(output)
-    defaults = config['defaults']['downloader']
+    defaults = config["defaults"]["downloader"]
 
     public_api = pixivpy3.PixivAPI()
     public_api.set_accept_language("en-us")
@@ -621,14 +623,16 @@ def main():
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
 
     # load defaults from the config
-    load_default_fields = ['max_bookmarks',
-                           'min_bookmarks',
-                           'max_lewd_level',
-                           'min_lewd_level',
-                           'max_pages']
+    load_default_fields = [
+        "max_bookmarks",
+        "min_bookmarks",
+        "max_lewd_level",
+        "min_lewd_level",
+        "max_pages",
+    ]
 
     if args.allow_r18 is False:
-        args.allow_r18 = defaults.get('allow_r18', False)
+        args.allow_r18 = defaults.get("allow_r18", False)
 
     for field in load_default_fields:
         arg = getattr(args, field, None)

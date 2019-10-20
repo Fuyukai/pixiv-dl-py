@@ -50,8 +50,9 @@ def get_config_in(dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="A config tool to provide default values for "
-                                                 "pixiv-dl.")
+    parser = argparse.ArgumentParser(
+        description="A config tool to provide default values for " "pixiv-dl."
+    )
 
     parser.add_argument("-o", "--output", help="The output directory", default="./output")
 
