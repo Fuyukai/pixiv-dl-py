@@ -604,7 +604,7 @@ def main():
 
     args = parser.parse_args()
 
-    output = Path(args.output)
+    output = Path(args.db)
     output.mkdir(exist_ok=True)
     config = get_config_in(output)
     defaults = config["defaults"]["downloader"]
