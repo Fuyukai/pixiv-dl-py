@@ -18,10 +18,7 @@ import pixivpy3
 from pixivpy3 import PixivError
 from termcolor import colored as coloured
 
-
-# fucking pycharm
-# https://github.com/yellowbluesky/PixivforMuzei3/blob/master/app/src/main/java/com/antony/muzei
-# /pixiv/PixivArtWorker.java#L503
+from pixiv_dl.config import get_config_in
 
 
 def cprint(msg: str, colour: str):
@@ -76,6 +73,7 @@ class Downloader(object):
         self.output_dir = output_dir
 
         self.allow_r18 = allow_r18
+        self.allow_r18 = allow_r18
         self.lewd_limits = lewd_limits
 
         self.filtered_tags = filter_tags
@@ -84,6 +82,20 @@ class Downloader(object):
         self.bookmark_limits = bookmark_limits
 
         self.max_pages = max_pages
+
+    def get_formatted_info(self) -> str:
+        """
+        Gets the formatted info for this downloader.
+        """
+        msgs = [
+            f"  allow r-18: {self.allow_r18}",
+            f"  lewd limits: max={self.lewd_limits[1]}, min={self.lewd_limits[0]}",
+            f"  bookmark limits: max={self.bookmark_limits[1]}, min={self.bookmark_limits[0]}",
+            f"  filtered tags: {self.filtered_tags}",
+            f"  required tags: {self.required_tags}",
+            f"  max pages: {self.max_pages}"
+        ]
+        return '\n'.join(msgs)
 
     def retry_wrapper(self, cbl):
         """
@@ -94,7 +106,7 @@ class Downloader(object):
             try:
                 res = cbl()
             except PixivError as e:
-                if "connection aborted" in str(e):
+                if "connection aborted" in str(e).lower():
                     # ignore
                     continue
 
@@ -295,10 +307,10 @@ class Downloader(object):
         elif illust["x_restrict"] and not self.allow_r18:
             msg = "Illustration is R-18"
 
-        elif lewd_level < self.lewd_limits[0]:
+        elif self.lewd_limits[0] is not None and lewd_level < self.lewd_limits[0]:
             msg = f"Illustration lewd level ({lewd_level}) is below minimum lewd level"
 
-        elif lewd_level > self.lewd_limits[1]:
+        elif self.lewd_limits[1] is not None and lewd_level > self.lewd_limits[1]:
             msg = f"Illustration lewd level ({lewd_level}) is above maximum lewd level"
 
         elif self.filtered_tags and filtered:
@@ -523,24 +535,33 @@ def main():
         "--allow-r18", action="store_true", help="If R-18 works should also be downloaded"
     )
 
-    parser.add_argument("--min-lewd-level", type=int, default=0, help="The minimum 'lewd level'")
-    parser.add_argument("--max-lewd-level", type=int, default=6, help="The maximum 'lewd level'")
-
+    # defaults: 0, 6
     parser.add_argument(
-        "--filter-tag", action="append", help="Ignore any illustrations with this tag"
+        "--min-lewd-level", type=int, help="The minimum 'lewd level'",
+        required=False,
     )
     parser.add_argument(
-        "--require-tag", action="append", help="Require illustrations to have this tag"
+        "--max-lewd-level", type=int, help="The maximum 'lewd level'",
+        required=False,
     )
 
     parser.add_argument(
-        "--min-bookmarks", type=int, default=None, help="Minimum number of bookmarks"
+        "--filter-tag", action="append", help="Ignore any illustrations with this tag",
+        required=False,
+    )
+    parser.add_argument(
+        "--require-tag", action="append", help="Require illustrations to have this tag",
+        required=False,
+    )
+
+    parser.add_argument(
+        "--min-bookmarks", type=int, help="Minimum number of bookmarks", required=False,
     )
     parser.add_argument(  # i have no idea when this will ever be useful, but symmetry
-        "--max-bookmarks", type=int, default=None, help="Maximum number of bookmarks"
+        "--max-bookmarks", type=int, help="Maximum number of bookmarks", required=False,
     )
 
-    parser.add_argument("--max-pages", type=int, default=None, help="Maximum number of pages")
+    parser.add_argument("--max-pages", type=int, help="Maximum number of pages", required=False)
 
     parsers = parser.add_subparsers(dest="subcommand")
 
@@ -576,6 +597,8 @@ def main():
 
     output = Path(args.output)
     output.mkdir(exist_ok=True)
+    config = get_config_in(output)
+    defaults = config['defaults']['downloader']
 
     public_api = pixivpy3.PixivAPI()
     public_api.set_accept_language("en-us")
@@ -597,10 +620,26 @@ def main():
         token_file.write_text(aapi.refresh_token)
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
 
+    # load defaults from the config
+    load_default_fields = ['max_bookmarks',
+                           'min_bookmarks',
+                           'max_lewd_level',
+                           'min_lewd_level',
+                           'max_pages']
+
+    if args.allow_r18 is False:
+        args.allow_r18 = defaults.get('allow_r18', False)
+
+    for field in load_default_fields:
+        arg = getattr(args, field, None)
+        if arg is None:
+            setattr(args, field, defaults.get(field))
+
+    # make sure to make these emtpy lists
     if args.filter_tag is None:
-        args.filter_tag = []
+        args.filter_tag = defaults.get("filtered_tags", [])
     if args.require_tag is None:
-        args.require_tag = []
+        args.require_tag = defaults.get("required_tags", [])
 
     dl = Downloader(
         aapi,
@@ -613,6 +652,8 @@ def main():
         bookmark_limits=(args.min_bookmarks, args.max_bookmarks),
         max_pages=args.max_pages,
     )
+    print("Running downloader with:")
+    print(dl.get_formatted_info())
 
     subcommand = args.subcommand
     if subcommand == "bookmarks":
