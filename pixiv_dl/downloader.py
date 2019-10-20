@@ -663,7 +663,7 @@ def main():
         aapi,
         public_api,
         output,
-        config=config['config']['downloader'],
+        config=config["config"]["downloader"],
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
         filter_tags=set(x.lower() for x in args.filter_tag),
