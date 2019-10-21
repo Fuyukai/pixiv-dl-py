@@ -16,13 +16,9 @@ from typing import List, Set, Any, Tuple
 import arrow
 import pixivpy3
 from pixivpy3 import PixivError
-from termcolor import colored as coloured
+from termcolor import cprint
 
 from pixiv_dl.config import get_config_in
-
-
-def cprint(msg: str, colour: str):
-    return print(coloured(msg, colour))
 
 
 @dataclass
@@ -38,6 +34,12 @@ class DownloadableImage:
 
 
 class Downloader(object):
+    VALID_RANKINGS = {
+        "day", "day_male", "day_female", "day_male_r18", "day_female_r18",
+        "week", "week_original", "week_rookie", "week_r18",  "week_r18g",
+        "month",
+    }
+
     def __init__(
         self,
         aapi: pixivpy3.AppPixivAPI,
@@ -522,6 +524,34 @@ class Downloader(object):
             with ThreadPoolExecutor(4) as e:
                 list(e.map(partial(self.do_download_with_symlinks, tag_dir), to_dl))
 
+    def download_ranking(self, mode: str, date: str = None):
+        """
+        Downloads the current rankings.
+        """
+        cprint(f"Downloading the rankings for mode {mode}")
+
+        raw = self.output_dir / "raw"
+        raw.mkdir(exist_ok=True)
+
+        rankings_base = self.output_dir / "rankings"
+        if date is None:
+            today = arrow.utcnow()
+            ranking_fname = mode + "-" + today.format("YYYY-MM-DD")
+        else:
+            ranking_fname = mode + "-" + date
+
+        rankings_dir = rankings_base / ranking_fname
+        rankings_dir.mkdir(exist_ok=True, parents=True)
+
+        method = partial(self.aapi.illust_ranking, mode=mode, date=date)
+        to_process = self.depaginate_download(method, param_name="offset")
+        to_dl = self.process_and_save_illusts(to_process)
+
+        with ThreadPoolExecutor(4) as e:
+            # list() call unwraps errors
+            list(e.map(partial(self.do_download_with_symlinks, rankings_dir), to_dl))
+
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -599,6 +629,14 @@ def main():
     tag_mode.add_argument(
         "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
+
+    ranking_mode = parsers.add_parser("rankings", help="Download works from the rankings")
+    ranking_mode.add_argument("-m", "--mode",
+                              help="The ranking mode to download", default="day",
+                              choices=Downloader.VALID_RANKINGS)
+    ranking_mode.add_argument("--date",
+                              help="The date to download rankings on. Defaults to today.",
+                              default=None)
 
     parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
 
@@ -690,6 +728,9 @@ def main():
     elif subcommand == "tag":
         cprint("Downloading a tag...", "cyan")
         return dl.download_tag(args.tag, max_items=args.limit)
+    elif subcommand == "rankings":
+        cprint("Downloading rankings...", "cyan")
+        return dl.download_ranking(mode=args.mode, date=args.date)
     elif subcommand == "auth":
         pass
     else:
