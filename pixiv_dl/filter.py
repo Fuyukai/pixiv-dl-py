@@ -41,9 +41,7 @@ class BasicFieldFilterer(FilterRule):
     Represents a basic field filterer.
     """
 
-    def __init__(
-            self, field: str, value: Any, *, invert: bool = False, custom_message: str = None
-    ):
+    def __init__(self, field: str, value: Any, *, invert: bool = False, custom_message: str = None):
         """
         :param field: The field to filter.
         :param value: The value to check.
@@ -80,19 +78,18 @@ class GtLtFilterRule(BasicFieldFilterer):
     A greater-than/less-than filter rule
     """
 
-    def __init__(self, field: str, value: Any, op: str = '>=', *,
-                 custom_message: str = None):
+    def __init__(self, field: str, value: Any, op: str = ">=", *, custom_message: str = None):
         super().__init__(field=field, value=value, custom_message=custom_message)
         self.op = op
 
     def filter(self, value: Any) -> bool:
-        if self.op == '>=':
+        if self.op == ">=":
             return value >= self.value
-        elif self.op == '>':
+        elif self.op == ">":
             return value > self.value
-        elif self.op == '<':
+        elif self.op == "<":
             return value < self.value
-        elif self.op == '<=':
+        elif self.op == "<=":
             return value <= self.value
 
 
@@ -133,6 +130,7 @@ class UserFilterer(FilterRule):
     """
     Filters by a user.
     """
+
     field = "user"
 
     def __init__(self, user_id: int, *, invert: bool = False):
@@ -140,14 +138,14 @@ class UserFilterer(FilterRule):
         self.invert = invert
 
     def filter(self, value: Any) -> bool:
-        user_id = value['id']
+        user_id = value["id"]
         if self.invert:
             return user_id == self.user_id
         else:
             return user_id != self.user_id
 
     def get_message(self, value) -> str:
-        user_id = value['id']
+        user_id = value["id"]
         if self.invert:
             return f"Not posted by {self.user_id}, but by {user_id}"
         else:
@@ -234,10 +232,7 @@ def main():
     # output controls
     parser.add_argument("-d", "--db", help="The db dir (containing config, etc)", default="output/")
     parser.add_argument(
-        "-s",
-        "--subdir",
-        help="The subdirectory to filter through (default is the raw downloaded files",
-        default="raw/",
+        "--override-dir", help="The dir to actually filter in. Defaults to $db/raw", default=None
     )
     parser.add_argument(
         "-o", "--output", help="The directory to output the filtered items", default="filtered/"
@@ -262,9 +257,7 @@ def main():
     r18_group.add_argument(
         "--require-r18", help="Requires R-18 content", action="store_true"
     )  # for the ultimate in porn downloading
-    r18_group.add_argument(
-        "--exclude-r18", help="Excludes R-18 content", action="store_true"
-    )
+    r18_group.add_argument("--exclude-r18", help="Excludes R-18 content", action="store_true")
 
     parser.add_argument(
         "--require-user", help="Requires a user ID", type=int, action="append", default=[]
@@ -293,29 +286,31 @@ def main():
     db_dir = Path(args.db)
     db_dir.mkdir(exist_ok=True)
 
-    subdir = db_dir / args.subdir
-    subdir.mkdir(exist_ok=True)
+    if args.override_dir is not None:
+        filter_dir = Path(args.override_dir)
+    else:
+        filter_dir = db_dir / "raw"
 
     output_dir = Path(args.output)
     output_dir.mkdir(exist_ok=True)
 
-    filterer = Filterer(subdir)
+    filterer = Filterer(filter_dir)
 
     # build all the rules
     for simple_rule in args.require_field:
-        cprint(f"Adding filter rule for {simple_rule}", 'cyan')
+        cprint(f"Adding filter rule for {simple_rule}", "cyan")
         field, value = simple_rule.split("=", 1)
         filterer.add_rule(BasicFieldFilterer(field, value))
 
     for user in args.require_user:
-        cprint(f"Adding required user {user}", 'cyan')
+        cprint(f"Adding required user {user}", "cyan")
         filterer.add_rule(UserFilterer(user))
     for user in args.exclude_user:
-        cprint(f"Adding excluded user {user}", 'magenta')
+        cprint(f"Adding excluded user {user}", "magenta")
         filterer.add_rule(UserFilterer(user, invert=True))
 
     if args.require_r18:
-        cprint(f"Adding required R-18 rule", 'cyan')
+        cprint(f"Adding required R-18 rule", "cyan")
         filterer.add_rule(
             BasicFieldFilterer(
                 "x_restrict", 0, invert=True, custom_message="Illustration is not R-18"
@@ -323,40 +318,38 @@ def main():
         )
 
     elif args.exclude_r18:
-        cprint(f"Adding required non R-18 rule", 'magenta')
+        cprint(f"Adding required non R-18 rule", "magenta")
         filterer.add_rule(
             BasicFieldFilterer("x_restrict", 0, custom_message="Illustration is R-18")
         )
 
     for tag in args.require_tag:
-        cprint(f"Adding required tag {tag}", 'cyan')
+        cprint(f"Adding required tag {tag}", "cyan")
         filterer.add_rule(TagFilterer(tag))
     for tag in args.exclude_tag:
-        cprint(f"Adding excluded tag {tag}", 'magenta')
+        cprint(f"Adding excluded tag {tag}", "magenta")
         filterer.add_rule(TagFilterer(tag, invert=True))
 
     if args.min_bookmarks is not None:
-        cprint(f"Adding minimum bookmarks requirement {args.min_bookmarks}", 'cyan')
-        filterer.add_rule(GtLtFilterRule("total_bookmarks", args.min_bookmarks, op='>='))
+        cprint(f"Adding minimum bookmarks requirement {args.min_bookmarks}", "cyan")
+        filterer.add_rule(GtLtFilterRule("total_bookmarks", args.min_bookmarks, op=">="))
     if args.max_bookmarks is not None:
-        cprint(f"Adding maximum bookmarks requirement {args.max_bookmarks}", 'magenta')
-        filterer.add_rule(GtLtFilterRule("total_bookmarks", args.max_bookmarks, op='<='))
+        cprint(f"Adding maximum bookmarks requirement {args.max_bookmarks}", "magenta")
+        filterer.add_rule(GtLtFilterRule("total_bookmarks", args.max_bookmarks, op="<="))
 
     if args.min_lewd_level is not None:
-        cprint(f"Adding minimum lewd level requirement {args.min_lewd_level}", 'cyan')
+        cprint(f"Adding minimum lewd level requirement {args.min_lewd_level}", "cyan")
         msg = f"Lewd level {{value}} lower than minimum ({args.min_lewd_level})"
 
         filterer.add_rule(
-            GtLtFilterRule("sanity_level", args.min_lewd_level,
-                           op='>=', custom_message=msg)
+            GtLtFilterRule("sanity_level", args.min_lewd_level, op=">=", custom_message=msg)
         )
     if args.max_lewd_level is not None:
-        cprint(f"Adding maximum lewd level requirement {args.max_lewd_level}", 'magenta')
+        cprint(f"Adding maximum lewd level requirement {args.max_lewd_level}", "magenta")
         msg = f"Lewd level {{value}} higher than maximum ({args.max_lewd_level})"
 
         filterer.add_rule(
-            GtLtFilterRule("sanity_level", args.max_lewd_level, op='<=',
-                           custom_message=msg)
+            GtLtFilterRule("sanity_level", args.max_lewd_level, op="<=", custom_message=msg)
         )
 
     filterer.symlink_filtered(output_dir, suppress_filter_messages=args.suppress_extra)
