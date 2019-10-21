@@ -541,7 +541,7 @@ class Downloader(object):
         """
         Downloads the current rankings.
         """
-        cprint(f"Downloading the rankings for mode {mode}", 'cyan')
+        cprint(f"Downloading the rankings for mode {mode}", "cyan")
 
         raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
@@ -564,11 +564,11 @@ class Downloader(object):
             # list() call unwraps errors
             list(e.map(partial(self.do_download_with_symlinks, rankings_dir), to_dl))
 
-    def download_recommended(self):
+    def download_recommended(self, max_items: int = 500):
         """
         Downloads recommended items.
         """
-        cprint("Downloading recommended rankings...", 'cyan')
+        cprint("Downloading recommended rankings...", "cyan")
         raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
@@ -576,11 +576,15 @@ class Downloader(object):
         recommended.mkdir(exist_ok=True)
 
         method = partial(self.aapi.illust_recommended)
-        to_process = self.depaginate_download(method, param_names=(
-            'min_bookmark_id_for_recent_illust',
-            'max_bookmark_id_for_recommend',
-            'offset',
-        ), max_items=1000)
+        to_process = self.depaginate_download(
+            method,
+            param_names=(
+                "min_bookmark_id_for_recent_illust",
+                "max_bookmark_id_for_recommend",
+                "offset",
+            ),
+            max_items=max_items,
+        )
         to_dl = self.process_and_save_illusts(to_process)
 
         with ThreadPoolExecutor(4) as e:
@@ -678,6 +682,9 @@ def main():
     )
 
     recommended_mode = parsers.add_parser("recommended", help="Downloads recommended works")
+    recommended_mode.add_argument(
+        "-l", "--limit", default=500, help="The maximum number of items to download", type=int
+    )
 
     parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
 
@@ -774,7 +781,7 @@ def main():
         return dl.download_ranking(mode=args.mode, date=args.date)
     elif subcommand == "recommended":
         cprint("Downloading recommended works...", "cyan")
-        return dl.download_recommended()
+        return dl.download_recommended(max_items=args.limit)
     elif subcommand == "auth":
         pass
     else:
