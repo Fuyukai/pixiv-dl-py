@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pixiv-dl"
-version = "0.2.0"
+version = "0.3.0"
 description = "A tool to download from pixiv"
 authors = ["Laura F Dickinson <l@veriny.tf>"]
 license = "GPL-3.0-or-later"
