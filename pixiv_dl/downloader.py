@@ -3,7 +3,6 @@ Pixiv mass downloading tool.
 """
 import argparse
 import json
-import re
 import textwrap
 import traceback
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -11,7 +10,8 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from pprint import pprint
-from typing import List, Set, Any, Tuple
+from typing import List, Set, Any, Tuple, Iterable
+from urllib.parse import urlsplit, parse_qs
 
 import arrow
 import pixivpy3
@@ -225,31 +225,35 @@ class Downloader(object):
     def depaginate_download(
         self,
         meth,
-        param_name: str = "max_bookmark_id",
+        param_names: Iterable[str] = ("max_bookmark_id",),
         key_name: str = "illusts",
         max_items: int = None,
-        initial_param: Any = None,
+        initial_params: Iterable[Any] = (),
     ):
         """
         Depaginates a method. Pass a partial of the method you want here to depaginate.
 
-        :param param_name: The param name to use for paginating.
+        :param param_names: The param names to use for paginating.
         :param key_name: The key name to use for unpacking the objects.
         :param max_items: The maximum items to depaginate.
-        :param initial_param: The initial offset to depaginate.
+        :param initial_params: The initial parameters to provide.
         """
-        search_name = param_name
 
-        last_id = initial_param
+        if isinstance(param_names, str):
+            param_names = (param_names,)
+
+        next_params = initial_params
         to_process = []
 
         for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
-            if not last_id:
+            if not next_params:
                 cprint("Downloading initial page...", "cyan")
                 response = self.retry_wrapper(meth)
             else:
-                cprint(f"Downloading page after {last_id}...", "cyan")
-                params = {param_name: last_id}
+                params = dict(zip(param_names, next_params))
+                fmt_params = " ".join(f"{name}={value}" for (name, value) in params.items())
+
+                cprint(f"Downloading page with params {fmt_params}...", "cyan")
                 p = partial(meth, **params)
                 response = self.retry_wrapper(p)
 
@@ -262,7 +266,8 @@ class Downloader(object):
 
             next_url = response["next_url"]
             if next_url is not None:
-                last_id = re.findall(f"{search_name}=([0-9]+)", next_url)[0]
+                query = parse_qs(urlsplit(next_url).query)
+                next_params = [query[key][0] for key in param_names]
             else:
                 # no more bookmarks!
                 break
@@ -392,7 +397,7 @@ class Downloader(object):
         bookmark_dir.mkdir(exist_ok=True)
 
         fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
-        to_process = self.depaginate_download(fn, param_name="max_bookmark_id")
+        to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
         # downloadable objects, list of lists
         to_dl = self.process_and_save_illusts(to_process)
         # free memory during the download process, we don't need these anymore
@@ -435,7 +440,7 @@ class Downloader(object):
             cprint(f"Saving following data...", "cyan")
             following = self.depaginate_download(
                 partial(self.aapi.user_following, user_id=user_id),
-                param_name="offset",
+                param_names=("offset",),
                 key_name="user_previews",
             )
             (user_dir / "following.json").write_text(json.dumps(following, indent=4))
@@ -448,7 +453,7 @@ class Downloader(object):
 
         # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
-        to_process_works = self.depaginate_download(fn, param_name="offset")
+        to_process_works = self.depaginate_download(fn, param_names=("offset",))
         to_dl_works = self.process_and_save_illusts(to_process_works)
 
         if full:
@@ -485,7 +490,7 @@ class Downloader(object):
 
             fn = partial(self.aapi.illust_follow)
             to_process = self.depaginate_download(
-                fn, max_items=30, param_name="offset", initial_param=x
+                fn, max_items=30, param_names=("offset",), initial_params=(x,)
             )
             # no more to DL
             if len(to_process) == 0:
@@ -520,7 +525,7 @@ class Downloader(object):
 
             fn = partial(self.aapi.search_illust, word=main_tag)
             to_process = self.depaginate_download(
-                fn, max_items=30, param_name="offset", initial_param=x
+                fn, max_items=30, param_names=("offset",), initial_params=(x,)
             )
             # no more to DL
             if len(to_process) == 0:
@@ -536,7 +541,7 @@ class Downloader(object):
         """
         Downloads the current rankings.
         """
-        cprint(f"Downloading the rankings for mode {mode}")
+        cprint(f"Downloading the rankings for mode {mode}", 'cyan')
 
         raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
@@ -552,12 +557,35 @@ class Downloader(object):
         rankings_dir.mkdir(exist_ok=True, parents=True)
 
         method = partial(self.aapi.illust_ranking, mode=mode, date=date)
-        to_process = self.depaginate_download(method, param_name="offset")
+        to_process = self.depaginate_download(method, param_names=("offset",))
         to_dl = self.process_and_save_illusts(to_process)
 
         with ThreadPoolExecutor(4) as e:
             # list() call unwraps errors
             list(e.map(partial(self.do_download_with_symlinks, rankings_dir), to_dl))
+
+    def download_recommended(self):
+        """
+        Downloads recommended items.
+        """
+        cprint("Downloading recommended rankings...", 'cyan')
+        raw = self.output_dir / "raw"
+        raw.mkdir(exist_ok=True)
+
+        recommended = self.output_dir / "recommended"
+        recommended.mkdir(exist_ok=True)
+
+        method = partial(self.aapi.illust_recommended)
+        to_process = self.depaginate_download(method, param_names=(
+            'min_bookmark_id_for_recent_illust',
+            'max_bookmark_id_for_recommend',
+            'offset',
+        ), max_items=1000)
+        to_dl = self.process_and_save_illusts(to_process)
+
+        with ThreadPoolExecutor(4) as e:
+            # list() call unwraps errors
+            return list(e.map(partial(self.do_download_with_symlinks, recommended), to_dl))
 
 
 def main():
@@ -648,6 +676,8 @@ def main():
     ranking_mode.add_argument(
         "--date", help="The date to download rankings on. Defaults to today.", default=None
     )
+
+    recommended_mode = parsers.add_parser("recommended", help="Downloads recommended works")
 
     parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
 
@@ -742,6 +772,9 @@ def main():
     elif subcommand == "rankings":
         cprint("Downloading rankings...", "cyan")
         return dl.download_ranking(mode=args.mode, date=args.date)
+    elif subcommand == "recommended":
+        cprint("Downloading recommended works...", "cyan")
+        return dl.download_recommended()
     elif subcommand == "auth":
         pass
     else:
