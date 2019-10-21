@@ -35,8 +35,16 @@ class DownloadableImage:
 
 class Downloader(object):
     VALID_RANKINGS = {
-        "day", "day_male", "day_female", "day_male_r18", "day_female_r18",
-        "week", "week_original", "week_rookie", "week_r18",  "week_r18g",
+        "day",
+        "day_male",
+        "day_female",
+        "day_male_r18",
+        "day_female_r18",
+        "week",
+        "week_original",
+        "week_rookie",
+        "week_r18",
+        "week_r18g",
         "month",
     }
 
@@ -552,7 +560,6 @@ class Downloader(object):
             list(e.map(partial(self.do_download_with_symlinks, rankings_dir), to_dl))
 
 
-
 def main():
     parser = argparse.ArgumentParser(
         description=textwrap.dedent(
@@ -631,12 +638,16 @@ def main():
     )
 
     ranking_mode = parsers.add_parser("rankings", help="Download works from the rankings")
-    ranking_mode.add_argument("-m", "--mode",
-                              help="The ranking mode to download", default="day",
-                              choices=Downloader.VALID_RANKINGS)
-    ranking_mode.add_argument("--date",
-                              help="The date to download rankings on. Defaults to today.",
-                              default=None)
+    ranking_mode.add_argument(
+        "-m",
+        "--mode",
+        help="The ranking mode to download",
+        default="day",
+        choices=Downloader.VALID_RANKINGS,
+    )
+    ranking_mode.add_argument(
+        "--date", help="The date to download rankings on. Defaults to today.", default=None
+    )
 
     parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
 
