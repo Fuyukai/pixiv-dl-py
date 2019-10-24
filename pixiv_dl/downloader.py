@@ -4,7 +4,6 @@ Pixiv mass downloading tool.
 import argparse
 import json
 import textwrap
-import traceback
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
@@ -156,13 +155,8 @@ class Downloader(object):
                 return
 
             cprint(f"Downloading {item.id} page {item.page_num}", "cyan")
-            try:
-                p = partial(self.aapi.download, url=item.url, path=output_dir, replace=True)
-                self.retry_wrapper(p)
-            except Exception:
-                cprint("Failed to download image...", "red")
-                traceback.print_exc()
-                return
+            p = partial(self.aapi.download, url=item.url, path=output_dir, replace=True)
+            self.retry_wrapper(p)
 
             cprint(f"Successfully downloaded image for {item.id}", "green")
 
