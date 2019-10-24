@@ -314,6 +314,12 @@ class Downloader(object):
         filtered = tags.intersection(self.filtered_tags)
         required = tags.intersection(self.required_tags)
         bookmarks = illust["total_bookmarks"]
+        pages = illust["meta_pages"]
+
+        max_bm = self.bookmark_limits[1]
+        min_bm = self.bookmark_limits[0]
+        max_lewd = self.lewd_limits[1]
+        min_lewd = self.lewd_limits[0]
 
         if not illust["visible"]:
             msg = "Illustration is not visible"
@@ -321,11 +327,11 @@ class Downloader(object):
             if illust["x_restrict"] and not self.allow_r18:
                 msg = "Illustration is R-18"
 
-            elif self.lewd_limits[0] is not None and lewd_level < self.lewd_limits[0]:
-                msg = f"Illustration lewd level ({lewd_level}) is below minimum lewd level"
+            elif min_lewd is not None and lewd_level < min_lewd:
+                msg = f"Illustration lewd level ({lewd_level}) is below minimum level ({min_lewd})"
 
-            elif self.lewd_limits[1] is not None and lewd_level > self.lewd_limits[1]:
-                msg = f"Illustration lewd level ({lewd_level}) is above maximum lewd level"
+            elif max_lewd is not None and lewd_level > max_lewd:
+                msg = f"Illustration lewd level ({lewd_level}) is above maximum level ({max_lewd})"
 
             elif self.filtered_tags and filtered:
                 msg = f"Illustration contains filtered tags {filtered}"
@@ -333,14 +339,14 @@ class Downloader(object):
             elif self.required_tags and not required:
                 msg = f"Illustration missing any of the required tags {self.required_tags}"
 
-            elif self.bookmark_limits[1] is not None and self.bookmark_limits[1] < bookmarks:
-                msg = f"Illustration has too many bookmarks ({bookmarks})"
+            elif max_bm is not None and bookmarks > max_bm:
+                msg = f"Illustration has too many bookmarks ({bookmarks} > {max_bm})"
 
-            elif self.bookmark_limits[0] is not None and self.bookmark_limits[0] > bookmarks:
-                msg = f"Illustration doesn't have enough bookmarks ({bookmarks})"
+            elif min_bm is not None and bookmarks < min_bm:
+                msg = f"Illustration doesn't have enough bookmarks ({bookmarks} < {min_bm})"
 
-            elif self.max_pages is not None and len(illust["meta_pages"]) > self.max_pages:
-                msg = f"Illustration has too many pages"
+            elif self.max_pages is not None and len(pages) > self.max_pages:
+                msg = f"Illustration has too many pages ({pages} > {self.max_pages})"
 
         return msg is not None, msg
 
