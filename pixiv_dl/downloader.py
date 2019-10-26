@@ -657,8 +657,6 @@ def main():
         """
         )
     )
-    parser.add_argument("-u", "--username", help="Your pixiv username")
-    parser.add_argument("-p", "--password", help="Your pixiv password")
     parser.add_argument(
         "-d", "--db", help="The local db directory for the command to run", default="./output"
     )
@@ -758,24 +756,22 @@ def main():
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
     cprint("Authenticating with Pixiv...", "cyan")
-    token_file = output / "refresh_token"
-    if token_file.exists():
-        aapi.auth(refresh_token=token_file.read_text())
-        cprint(f"Successfully logged in with token as {aapi.user_id}", "green")
-    else:
-        if not args.username or not args.password:
-            cprint("No refresh token found and no username/password provided cannot login", "red")
-            return
 
+    token_file = output / "refresh_token"
+    if args.subcommand == "auth":
         aapi.auth(username=args.username, password=args.password)
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
-
-    # if the user is using the `auth` subcommand we don't want to continue the control flow any further.
-    if args.subcommand == "auth":
         cprint("Authentication successful. Exiting...", "green")
         return
+
+    if not token_file.exists():
+        cprint("No credentials found. Please use auth subcommand to authenticate.")
+        return
+
+    aapi.auth(refresh_token=token_file.read_text())
+    cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
 
     # load defaults from the config
     load_default_fields = [
