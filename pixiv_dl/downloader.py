@@ -350,9 +350,7 @@ class Downloader(object):
 
         return msg is not None, msg
 
-    def process_and_save_illusts(
-        self, illusts: List[dict],
-    ) -> List[List[DownloadableImage]]:
+    def process_and_save_illusts(self, illusts: List[dict]) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
 
@@ -615,7 +613,7 @@ class Downloader(object):
             if not meta.exists():
                 continue
 
-            with meta.open(mode='r') as f:
+            with meta.open(mode="r") as f:
                 data = json.load(f)
 
             total_objects += 1
@@ -638,10 +636,10 @@ class Downloader(object):
                 if file.exists():
                     total_files += 1
 
-        cprint(f"Total illustration objects downloaded: {total_objects}", 'magenta')
-        cprint(f"Total pages: {page_count}", 'magenta')
-        cprint(f"Total files: {total_files}", 'magenta')
-        cprint(f"Total complete downloads: {total_downloaded}", 'magenta')
+        cprint(f"Total illustration objects downloaded: {total_objects}", "magenta")
+        cprint(f"Total pages: {page_count}", "magenta")
+        cprint(f"Total files: {total_files}", "magenta")
+        cprint(f"Total complete downloads: {total_downloaded}", "magenta")
 
 
 def main():
@@ -708,10 +706,7 @@ def main():
     mirror_mode = parsers.add_parser("mirror", help="Mirror a user")
     mirror_mode.add_argument("userid", help="The user ID to mirror", type=int)
     mirror_mode.add_argument(
-        "-f",
-        "--full",
-        action="store_true",
-        help="If this should also mirror all their bookmarks",
+        "-f", "--full", action="store_true", help="If this should also mirror all their bookmarks"
     )
 
     # tag mode
