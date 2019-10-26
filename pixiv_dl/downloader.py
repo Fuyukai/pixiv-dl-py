@@ -739,7 +739,9 @@ def main():
         "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
 
-    parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
+    auth = parsers.add_parser("auth", help="Generates the refresh token from credentials.")
+    auth.add_argument("username", help="Username to log in with")
+    auth.add_argument("password", help="Password associated with username")
 
     parsers.add_parser("stats", help="Shows statistics for the current download database.")
 
@@ -769,6 +771,11 @@ def main():
         public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
+
+    # if the user is using the `auth` subcommand we don't want to continue the control flow any further.
+    if args.subcommand == "auth":
+        cprint("Authentication successful. Exiting...", "green")
+        return
 
     # load defaults from the config
     load_default_fields = [
