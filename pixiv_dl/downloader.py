@@ -391,19 +391,25 @@ class Downloader(object):
         raw = self.output_dir / "raw"
         raw.mkdir(exist_ok=True)
 
-        bookmark_dir = self.output_dir / "bookmarks"
-        bookmark_dir.mkdir(exist_ok=True)
+        bookmark_root_dir = self.output_dir / "bookmarks"
+        bookmark_root_dir.mkdir(exist_ok=True)
 
-        fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id)
-        to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
-        # downloadable objects, list of lists
-        to_dl = self.process_and_save_illusts(to_process)
-        # free memory during the download process, we don't need these anymore
-        to_process.clear()
+        for restrict in "private", "public":
+            bookmark_dir = bookmark_root_dir / restrict
+            bookmark_dir.mkdir(exist_ok=True)
 
-        cprint("Downloading images concurrently...", "magenta")
-        with ThreadPoolExecutor(4) as e:
-            return list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
+            cprint(f"Downloading bookmark metadata type {restrict}")
+            fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id, restrict=restrict)
+            to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
+
+            # downloadable objects, list of lists
+            to_dl = self.process_and_save_illusts(to_process)
+            # free memory during the download process, we don't need these anymore
+            to_process.clear()
+
+            cprint("Downloading images concurrently...", "magenta")
+            with ThreadPoolExecutor(4) as e:
+                list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
 
     def mirror_user(self, user_id: int, *, full: bool = False):
         """
