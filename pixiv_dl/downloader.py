@@ -351,7 +351,7 @@ class Downloader(object):
         return msg is not None, msg
 
     def process_and_save_illusts(
-        self, illusts: List[dict], silent: bool = False
+        self, illusts: List[dict],
     ) -> List[List[DownloadableImage]]:
         """
         Processes and saves the list of illustrations.
@@ -591,6 +591,58 @@ class Downloader(object):
             # list() call unwraps errors
             return list(e.map(partial(self.do_download_with_symlinks, recommended), to_dl))
 
+    def print_stats(self):
+        """
+        Prints the statistics for the local download database.
+        """
+        raw_dir = self.output_dir / "raw"
+        if not raw_dir.exists():
+            cprint(f"No database found in {self.output_dir.resolve()}", "red")
+            return
+
+        total_objects = 0
+        total_downloaded = 0
+        total_files = 0
+        page_count = 0
+
+        for subdir in raw_dir.iterdir():
+            # if the user decides to put random files in the raw/ directory...
+            if not subdir.is_dir():
+                continue
+
+            # meta signifies existence of the actual object
+            meta = subdir / "meta.json"
+            if not meta.exists():
+                continue
+
+            with meta.open(mode='r') as f:
+                data = json.load(f)
+
+            total_objects += 1
+            # marker is the sign that all files were downloaded
+            marker = subdir / "marker.json"
+            if marker.exists():
+                total_downloaded += 1
+
+            pages = data.get("meta_pages")
+            if not pages:
+                pages = [data["meta_single_page"]["original_image_url"]]
+            else:
+                pages = list(map(lambda x: x["image_urls"]["original"], pages))
+
+            page_count += len(pages)
+
+            for page in pages:
+                fname = page.split("/")[-1]
+                file = subdir / fname
+                if file.exists():
+                    total_files += 1
+
+        cprint(f"Total illustration objects downloaded: {total_objects}", 'magenta')
+        cprint(f"Total pages: {page_count}", 'magenta')
+        cprint(f"Total files: {total_files}", 'magenta')
+        cprint(f"Total complete downloads: {total_downloaded}", 'magenta')
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -659,7 +711,7 @@ def main():
         "-f",
         "--full",
         action="store_true",
-        help="If this should also " "mirror all their bookmarks",
+        help="If this should also mirror all their bookmarks",
     )
 
     # tag mode
@@ -687,6 +739,8 @@ def main():
     )
 
     parsers.add_parser("auth", help="Empty command; used to generate the refresh token.")
+
+    parsers.add_parser("stats", help="Shows statistics for the current download database.")
 
     args = parser.parse_args()
 
@@ -782,6 +836,9 @@ def main():
     elif subcommand == "recommended":
         cprint("Downloading recommended works...", "cyan")
         return dl.download_recommended(max_items=args.limit)
+    elif subcommand == "stats":
+        cprint("Providing statistics...", "cyan")
+        return dl.print_stats()
     elif subcommand == "auth":
         pass
     else:
