@@ -157,12 +157,13 @@ class Filterer(object):
     Represents a filterer that filters out a downloaded pixiv database.
     """
 
-    def __init__(self, dir: Path):
+    def __init__(self, dir: Path, require_downloaded: bool = False):
         """
         :param dir: The directory to filter.
         """
         self.dir = dir
 
+        self.require_downloaded = require_downloaded
         self.filter_rules: List[FilterRule] = []
 
     def add_rule(self, rule: FilterRule):
@@ -188,6 +189,11 @@ class Filterer(object):
         Filters illustrations.
         """
         for item in self.dir.iterdir():
+            if self.require_downloaded:
+                marker = item / "marker.json"
+                if not marker.exists():
+                    continue
+
             # make sure we have a meta file
             meta = item / "meta.json"
             if not meta.exists():
@@ -244,6 +250,12 @@ def main():
         default=False,
     )
 
+    parser.add_argument(
+        "--require-downloaded",
+        help="Requires the filtered objects to be downloaded",
+        action="store_true",
+    )
+
     # generic parser
     parser.add_argument(
         "--require-field", help="Adds a filter on a field", action="append", default=[]
@@ -294,7 +306,7 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(exist_ok=True)
 
-    filterer = Filterer(filter_dir)
+    filterer = Filterer(filter_dir, require_downloaded=args.require_downloaded)
 
     # build all the rules
     for simple_rule in args.require_field:
