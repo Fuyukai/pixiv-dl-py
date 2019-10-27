@@ -760,7 +760,6 @@ def main():
     token_file = output / "refresh_token"
     if args.subcommand == "auth":
         aapi.auth(username=args.username, password=args.password)
-        public_api.set_auth(aapi.access_token, aapi.refresh_token)
         token_file.write_text(aapi.refresh_token)
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
         cprint("Authentication successful. Exiting...", "green")
@@ -772,6 +771,8 @@ def main():
 
     aapi.auth(refresh_token=token_file.read_text())
     cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
+
+    public_api.set_auth(aapi.access_token, aapi.refresh_token)
 
     # load defaults from the config
     load_default_fields = [
