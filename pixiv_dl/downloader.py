@@ -762,7 +762,9 @@ def main():
         aapi.auth(username=args.username, password=args.password)
         token_file.write_text(aapi.refresh_token)
         cprint(f"Successfully logged in with username/password as {aapi.user_id}", "magenta")
-        cprint(f"Refresh token successfully written to {token_file.absolute()}. Exiting...", "green")
+        cprint(
+            f"Refresh token successfully written to {token_file.absolute()}. Exiting...", "green"
+        )
         return
 
     if not token_file.exists():
