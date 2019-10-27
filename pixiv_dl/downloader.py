@@ -766,7 +766,7 @@ def main():
         return
 
     if not token_file.exists():
-        cprint("No refresh token found. Please use auth subcommand to authenticate.")
+        cprint("No refresh token found. Please use auth subcommand to authenticate.", "red")
         return
 
     aapi.auth(refresh_token=token_file.read_text())
