@@ -126,8 +126,12 @@ class Downloader(object):
 
                 raise
 
-            # check for login
-            if res is not None and "error" in res:
+            # check for login:
+            if res is False:
+                raise Exception("Error downloading?")
+            elif res is True:
+                return res
+            elif "error" in res:
                 if "invalid_grant" not in res["error"]["message"]:
                     pprint(res)
                     raise Exception("Unknown error")
