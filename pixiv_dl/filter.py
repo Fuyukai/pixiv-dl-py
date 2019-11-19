@@ -158,6 +158,7 @@ class Filterer(object):
     """
     Represents a filterer that filters out a downloaded pixiv database.
     """
+
     @classmethod
     def get_feh_command(cls, dir: Path) -> List[str]:
         """
@@ -173,7 +174,7 @@ class Filterer(object):
                 data = json.load(f)
 
             # order manually
-            if data['meta_single_page']:
+            if data["meta_single_page"]:
                 filename = data["meta_single_page"]["original_image_url"].split("/")[-1]
                 files.append(subdir / filename)
             else:
@@ -281,7 +282,7 @@ def main():
         "-c",
         "--clean",
         help="Clean up the filtered directory before filtering",
-        action="store_true"
+        action="store_true",
     )
 
     parser.add_argument(
@@ -332,6 +333,8 @@ def main():
     parser.add_argument(
         "--max-lewd-level", type=int, help="The maximum 'lewd level'", required=False
     )
+    parser.add_argument("--min-pages", type=int, help="The minimum amount of pages", required=False)
+    parser.add_argument("--max-pages", type=int, help="The maximum amount of pages", required=False)
 
     args = parser.parse_args()
 
@@ -408,7 +411,17 @@ def main():
             GtLtFilterRule("sanity_level", args.max_lewd_level, op="<=", custom_message=msg)
         )
 
+    if args.max_pages is not None:
+        cprint(f"Adding maximum page requirement {args.max_pages}", "magenta")
+        msg = f"Page count {{value}} higher than maximum ({args.max_pages})"
 
+        filterer.add_rule(GtLtFilterRule("page_count", args.max_pages, op="<=", custom_message=msg))
+
+    if args.min_pages is not None:
+        cprint(f"Adding minimum page requirement {args.min_pages}", "magenta")
+        msg = f"Page count {{value}} higher than maximum ({args.min_pages})"
+
+        filterer.add_rule(GtLtFilterRule("page_count", args.min_pages, op=">=", custom_message=msg))
 
     filterer.symlink_filtered(output_dir, suppress_filter_messages=args.suppress_extra)
     if args.feh:
