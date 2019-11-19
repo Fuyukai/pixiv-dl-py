@@ -4,6 +4,7 @@ Filtering utility for filtering downloaded works.
 import abc
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, List, Generator, Tuple, Optional
 
@@ -156,6 +157,32 @@ class Filterer(object):
     """
     Represents a filterer that filters out a downloaded pixiv database.
     """
+    @classmethod
+    def get_feh_command(cls, dir: Path) -> List[str]:
+        """
+        Gets the feh command for a directory.
+        """
+        files = []
+        for subdir in dir.iterdir():
+            meta = subdir / "meta.json"
+            if not meta.exists():
+                continue
+
+            with meta.open() as f:
+                data = json.load(f)
+
+            # order manually
+            if data['meta_single_page']:
+                filename = data["meta_single_page"]["original_image_url"].split("/")[-1]
+                files.append(subdir / filename)
+            else:
+                # these are ordered
+                for page in data["meta_pages"]:
+                    filename = page["image_urls"]["original"].split("/")[-1]
+                    files.append(subdir / filename)
+
+        filenames = [str(path.resolve()) for path in files]
+        return ["feh", "--scale-down", *filenames]
 
     def __init__(self, dir: Path, require_downloaded: bool = False):
         """
@@ -242,6 +269,12 @@ def main():
     )
     parser.add_argument(
         "-o", "--output", help="The directory to output the filtered items", default="filtered/"
+    )
+    parser.add_argument(
+        "-f",
+        "--feh",
+        help="Launches feh from the filtered directory after symlinking",
+        action="store_true",
     )
     parser.add_argument(
         "--suppress-extra",
@@ -365,6 +398,9 @@ def main():
         )
 
     filterer.symlink_filtered(output_dir, suppress_filter_messages=args.suppress_extra)
+    if args.feh:
+        feh_command = filterer.get_feh_command(output_dir)
+        subprocess.run(feh_command)
 
 
 if __name__ == "__main__":
