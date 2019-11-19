@@ -4,6 +4,7 @@ Filtering utility for filtering downloaded works.
 import abc
 import argparse
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, List, Generator, Tuple, Optional
@@ -277,6 +278,13 @@ def main():
         action="store_true",
     )
     parser.add_argument(
+        "-c",
+        "--clean",
+        help="Clean up the filtered directory before filtering",
+        action="store_true"
+    )
+
+    parser.add_argument(
         "--suppress-extra",
         help="Suppress unfiltered entry message printing",
         action="store_true",
@@ -337,6 +345,9 @@ def main():
         filter_dir = db_dir / "raw"
 
     output_dir = Path(args.output)
+    if args.clean and output_dir.exists():
+        shutil.rmtree(output_dir)
+
     output_dir.mkdir(exist_ok=True)
 
     filterer = Filterer(filter_dir, require_downloaded=args.require_downloaded)
@@ -396,6 +407,8 @@ def main():
         filterer.add_rule(
             GtLtFilterRule("sanity_level", args.max_lewd_level, op="<=", custom_message=msg)
         )
+
+
 
     filterer.symlink_filtered(output_dir, suppress_filter_messages=args.suppress_extra)
     if args.feh:
