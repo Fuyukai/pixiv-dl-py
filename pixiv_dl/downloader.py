@@ -402,12 +402,13 @@ class Downloader(object):
             bookmark_dir = bookmark_root_dir / restrict
             bookmark_dir.mkdir(exist_ok=True)
 
-            cprint(f"Downloading bookmark metadata type {restrict}")
+            cprint(f"Downloading bookmark metadata type {restrict}", "magenta")
             fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id, restrict=restrict)
             to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
 
             # downloadable objects, list of lists
             to_dl = self.process_and_save_illusts(to_process)
+            cprint(f"Got {len(to_dl)} bookmarks.", "cyan")
             # free memory during the download process, we don't need these anymore
             to_process.clear()
 
