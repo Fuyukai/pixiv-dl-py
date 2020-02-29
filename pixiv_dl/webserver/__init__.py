@@ -5,6 +5,7 @@ import enum
 import json
 import random
 from dataclasses import dataclass
+from os import fspath
 from pathlib import Path
 from typing import NoReturn
 
@@ -13,7 +14,7 @@ from flask import Flask, render_template, request, send_from_directory, safe_joi
 from pendulum import DateTime
 from werkzeug.exceptions import abort
 
-app = Flask("pixiv_dl.webserver")
+app = Flask(__name__)
 
 RAW = Path("raw")
 BK_PRIVATE = Path("bookmarks/private")
@@ -114,8 +115,7 @@ def info_from_path(path: Path) -> ArtworkCard:
 # flask setup
 @app.before_first_request
 def load_user_info():
-    dir = Path(app.config["db_dir"])
-    user_json = dir / "user.json"
+    user_json = Path("user.json")
     user_data = json.loads(user_json.read_text())
     app.config["user_data"] = user_data
 
@@ -130,8 +130,7 @@ def inject_stage_and_region():
 
 # db image server
 def _get_images_path(image_id: str) -> Path:
-    root = Path(app.config["db_dir"]) / RAW
-    image_dir = Path(safe_join(root, image_id))
+    image_dir = Path(safe_join(fspath(RAW), image_id))
 
     if not image_dir.exists():
         abort(404)
@@ -193,9 +192,8 @@ def artwork_page(artwork_id: int):
 # Bookmark routes
 @app.route("/pages/bookmarks")
 def bookmarks():
-    dir = app.config["db_dir"]
-    public_count = count_artworks(dir / BK_PUBLIC)
-    private_count = count_artworks(dir / BK_PRIVATE)
+    public_count = count_artworks(BK_PUBLIC)
+    private_count = count_artworks(BK_PRIVATE)
 
     return render_template(
         "bookmarks.html", bookmark_count_public=public_count, bookmark_count_private=private_count
@@ -219,10 +217,7 @@ def _artwork_grid(name: str, path: Path, **kwargs):
         raise Exception
 
     after = max(after, 0)
-
-    dir = app.config["db_dir"]
-    fullpath = Path(dir) / path
-    files = [subdir for subdir in fullpath.iterdir() if subdir.name.isdigit()]
+    files = [subdir for subdir in path.iterdir() if subdir.name.isdigit()]
     count = len(files)
 
     sorted_files = sorted(files, reverse=sort_mode == SortMode.DESCENDING)
@@ -271,12 +266,9 @@ def raw():
 # Tags routes
 @app.route("/pages/tags")
 def tags():
-    dir = app.config["db_dir"]
-    fullpath = Path(dir) / TAGS
-
     # list all tags in the tags dir
     tags = []
-    for subdir in fullpath.iterdir():
+    for subdir in TAGS.iterdir():
         if not subdir.is_dir():
             continue
 
