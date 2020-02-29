@@ -61,6 +61,11 @@
                         {% endif %}
                     </p>
                 </div>
+                <div class="card-footer">
+                    <div class="card-footer-item">
+                        Uploaded at: {{ data["create_date"] }}
+                    </div>
+                </div>
             </div>
 
             <br/>
@@ -74,6 +79,21 @@
                     {% else %}
                     {{ caption|safe }}
                     {% endif %}
+                </div>
+            </div>
+            <br/>
+            <div class="card" id="artwork-card-stats">
+                <header class="card-header">
+                    <p class="card-header-title">Stats</p>
+                </header>
+                <div class="card-content">
+                    <div class="content">
+                        <p><em>At time of download:</em></p>
+                        <ul>
+                            <li>Bookmarks: {{ data["total_bookmarks"] }}</li>
+                            <li>Views: {{ data["total_view"] }} </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             <br/>
