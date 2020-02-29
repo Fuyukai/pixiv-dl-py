@@ -38,7 +38,7 @@ img.grid-image {
 
 /* r18 hover */
 img.r18 {
-    filter: blur(10px);
+    /*filter: blur(10px);*/
     /* this causes it to blur in on load... */
     /*transition: filter 0.05s;*/
 }
