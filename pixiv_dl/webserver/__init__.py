@@ -312,6 +312,8 @@ def tags():
         )
         tags.append(tag_card)
 
+    tags = sorted(tags, key=lambda tagcard: tagcard.count, reverse=True)
+
     return render_template("tags.html", tags=tags)
 
 
