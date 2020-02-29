@@ -31,7 +31,7 @@
 </section>
 
 {% set current_page = (after // 25) %}
-{% set max_page = (total_count // 25 + 1) %}
+{% set max_page = (total_count // 25) %}
 <section class="section" style="padding: 0">
     <nav class="pagination is-centered">
         <ul class="pagination-list">
@@ -55,11 +55,13 @@
             </li>
 
             {# one page after #}
+            {% if current_page < max_page %}
             <li>
                 <a href="{{ page_url(current_page + 1) }}" class="pagination-link">
                     {{ button_text(current_page + 1) }}
                 </a>
             </li>
+            {% endif %}
 
             <li style="padding-left: 1rem">
                 <a href="{{ fwd_url }}" class="pagination-next">Go forwards</a>
