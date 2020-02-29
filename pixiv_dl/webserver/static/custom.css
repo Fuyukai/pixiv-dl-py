@@ -1,0 +1,72 @@
+/* gotta have a fancy navbar! */
+.navbar {
+    background-color: #FF6B81;
+    border-radius: 5px;
+}
+
+/* stop navbar from being so... squished */
+.navbar-brand {
+    padding-left: 1rem;
+}
+
+.navbar-end {
+    padding-right: 1rem;
+}
+
+/* navbar link colours */
+a.navbar-item {
+    color: #FFFFFF;
+}
+a.navbar-item:hover {
+    color: #6BFF88;
+}
+
+/* grid cards with equal height */
+.has-equal-height {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.has-equal-height .card-footer {
+  margin-top: auto;
+}
+
+img.grid-image {
+    object-fit: cover;
+}
+
+/* r18 hover */
+img.r18 {
+    filter: blur(10px);
+    /* this causes it to blur in on load... */
+    /*transition: filter 0.05s;*/
+}
+
+img.r18:hover {
+    filter: none;
+}
+
+/* artwork grid progress bar label */
+.artwork-progress-label {
+    position: relative;
+}
+
+/* artwork view image */
+.artwork-view-image {
+    max-height: 80vh;
+    max-width: 100vh;
+}
+
+.artwork-author-name {
+    font-weight: 500;
+    color: #2EFFA8;
+}
+
+.artwork-is-bookmarked {
+    color: #00AD65;
+}
+.artwork-not-bookmarked {
+    color: #AD1B00;
+    font-style: strong;
+}

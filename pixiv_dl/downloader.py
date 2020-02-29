@@ -12,7 +12,7 @@ from pprint import pprint
 from typing import List, Set, Any, Tuple, Iterable
 from urllib.parse import urlsplit, parse_qs
 
-import arrow
+import pendulum
 import pixivpy3
 from pixivpy3 import PixivError
 from termcolor import cprint
@@ -165,7 +165,7 @@ class Downloader(object):
             cprint(f"Successfully downloaded image for {item.id}", "green")
 
         (self.output_dir / "raw" / str(items[0].id) / "marker.json").write_text(
-            json.dumps({"downloaded": arrow.utcnow().isoformat()})
+            json.dumps({"downloaded": pendulum.now("UTC").isoformat()})
         )
 
         cprint(f"Successfully downloaded {item.id}", "green")
@@ -208,7 +208,7 @@ class Downloader(object):
         """
         illust_id = illust["id"]
         illust["_meta"] = {
-            "download-date": arrow.utcnow().isoformat(),
+            "download-date": pendulum.now("UTC").isoformat(),
             "tool": "pixiv-dl",
             "weblink": f"https://pixiv.net/en/artworks/{illust_id}",
         }
@@ -442,7 +442,7 @@ class Downloader(object):
         self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
 
         cprint(f"Saving metadata...", "cyan")
-        user_info["_meta"] = {"download-date": arrow.utcnow().isoformat(), "tool": "pixiv-dl"}
+        user_info["_meta"] = {"download-date": pendulum.now("UTC").isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
         if full:
@@ -527,6 +527,8 @@ class Downloader(object):
         tag_dir = tags_dir / main_tag
         tag_dir.mkdir(exist_ok=True)
 
+        tag_info_got = False
+
         max_items = min(max_items, 5000)  # pixiv limit :(
 
         for x in range(0, max_items, 30):
@@ -539,6 +541,23 @@ class Downloader(object):
             # no more to DL
             if len(to_process) == 0:
                 return
+
+            # save very very basic tag info...
+            if not tag_info_got:
+                cprint("Saving tag info...", "cyan")
+                one = next(iter(to_process))
+                translated_name = None
+
+                for tag_info in one["tags"]:
+                    if tag_info["name"] == main_tag:
+                        translated_name = tag_info["translated_name"]
+                        break
+
+                if translated_name:
+                    cprint(f"Translated name: {translated_name}", "magenta")
+                    tag_meta = tag_dir / "translation.json"
+                    with tag_meta.open(mode="w") as f:
+                        json.dump({"translated_name": translated_name}, f)
 
             to_dl = self.process_and_save_illusts(to_process)
 
@@ -557,7 +576,7 @@ class Downloader(object):
 
         rankings_base = self.output_dir / "rankings"
         if date is None:
-            today = arrow.utcnow()
+            today = pendulum.now("UTC")
             ranking_fname = mode + "-" + today.format("YYYY-MM-DD")
         else:
             ranking_fname = mode + "-" + date
@@ -778,6 +797,11 @@ def main():
 
     aapi.auth(refresh_token=token_file.read_text())
     cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
+
+    user_info_path = output / "user.json"
+    if not user_info_path.exists():
+        detail = aapi.user_detail(aapi.user_id)
+        user_info_path.write_text(json.dumps(detail, indent=4))
 
     public_api.set_auth(aapi.access_token, aapi.refresh_token)
 

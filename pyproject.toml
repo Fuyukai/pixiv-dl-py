@@ -10,9 +10,10 @@ repository = "https://github.com/Fuyukai/pixiv-dl"
 [tool.poetry.dependencies]
 python = "^3.7"
 pixivpy = "^3.5.0"
-arrow = "^0.15.2"
 termcolor = "^1.1.0"
 tomlkit = "^0.5.8"
+flask = "^1.1.1"
+pendulum = "^2.0.5"
 
 [tool.poetry.extras]
 filter = ["jq"]

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+{% set is_frontpage = false %}
+{% set is_raw = false %}
+{% set is_bookmarks = false %}
+{% set is_tags = false %}
+{% set is_users = false %}
+
+{% macro pixiv_author_url(id) -%}
+    {{ "https://www.pixiv.net/en/users/" + id|string }}
+{%- endmacro -%}
+
+{% macro pixiv_artwork_url(id) -%}
+    {{ "https://www.pixiv.net/en/artworks/" + id|string }}
+{%- endmacro -%}
+
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }} ">
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+
+    <title>Pixiv-DL Web Frontend</title>
+</head>
+<body>
+<div class="container">
+    <nav class="navbar" role="navigation" aria-label="main navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="https://github.com/Fuyukai/pixiv-dl">
+                <i class="fab fa-github" style="padding-right: 5px"></i>
+                <p>pixiv-dl</p>
+            </a>
+        </div>
+
+        <div class="navbar-menu">
+            <div class="navbar-start">
+                <a class="navbar-item" href="{{ url_for('.raw') }}">Raws</a>
+                <a class="navbar-item" href="{{ url_for('.bookmarks') }}">Bookmarks</a>
+                <a class="navbar-item" href="{{ url_for('.users') }}">Users</a>
+                <a class="navbar-item" href="{{ url_for('.tags') }}">Tags</a>
+            </div>
+
+            <div class="navbar-end">
+                <a class="navbar-item" href="https://www.pixiv.net/en/users/{{ userid }}">
+                    {{ username }}
+                </a>
+            </div>
+        </div>
+    </nav>
+</div>
+<div class="container-fluid">
+    {% block content %}
+    {% endblock %}
+</div>
+</body>
+
+</html>

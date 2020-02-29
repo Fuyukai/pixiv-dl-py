@@ -1,0 +1,48 @@
+{% extends "meta/base.html" %}
+{# Bookmarks page template #}
+
+{% block content %}
+
+<p class="title has-text-centered">Bookmark Browser</p>
+
+<hr/>
+<nav class="level bookmark-info">
+    <div class="level-item has-text-centered">
+        <div>
+            <p class="heading">Name</p>
+            <p class="title">
+                <a href="{{ url_for('bookmarks_public') }}">Public</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="level-item has-text-centered">
+        <div>
+            <p class="heading">Bookmark Count</p>
+            <p class="title">{{ bookmark_count_public }}</p>
+        </div>
+    </div>
+</nav>
+
+<hr/>
+<nav class="level bookmark-info">
+    <div class="level-item has-text-centered">
+        <div>
+            <p class="heading">Name</p>
+            <p class="title">
+                <a href="{{ url_for('bookmarks_private') }}">Private</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="level-item has-text-centered">
+        <div>
+            <p class="heading">Bookmark Count</p>
+            <p class="title">{{ bookmark_count_private }}</p>
+        </div>
+    </div>
+</nav>
+<hr/>
+
+
+{% endblock %}
