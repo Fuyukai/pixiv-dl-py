@@ -213,7 +213,7 @@ def _artwork_grid(name: str, path: Path, after: int, sort_mode: SortMode, **kwar
     count = len(files)
 
     sorted_files = sorted(files, reverse=sort_mode == SortMode.DESCENDING)
-    filelist = sorted_files[after: after + 25]
+    filelist = sorted_files[after : after + 25]
     tiles = []
 
     for subdir in filelist:
@@ -225,7 +225,7 @@ def _artwork_grid(name: str, path: Path, after: int, sort_mode: SortMode, **kwar
         after=after,
         sortmode=sort_mode.value.lower(),
         total_count=count,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -243,10 +243,7 @@ def bookmarks_public():
         abort(400)  # type: NoReturn
         raise Exception
 
-    return _artwork_grid(
-        "bookmark", BK_PUBLIC, after, sortmode,
-        bookmark_category="public"
-    )
+    return _artwork_grid("bookmark", BK_PUBLIC, after, sortmode, bookmark_category="public")
 
 
 @app.route("/pages/bookmarks/private")
@@ -261,10 +258,7 @@ def bookmarks_private():
     except ValueError:
         abort(400)  # type: NoReturn
 
-    return _artwork_grid(
-        "bookmark", BK_PRIVATE, after, sortmode,
-        bookmark_category="public"
-    )
+    return _artwork_grid("bookmark", BK_PRIVATE, after, sortmode, bookmark_category="public")
 
 
 # Raw routes
@@ -280,9 +274,7 @@ def raw():
     except ValueError:
         abort(400)  # type: NoReturn
 
-    return _artwork_grid(
-        "raw", RAW, after, sortmode
-    )
+    return _artwork_grid("raw", RAW, after, sortmode)
 
 
 # Tags routes
@@ -335,10 +327,7 @@ def tags_named(tag: str):
     except ValueError:
         abort(400)  # type: NoReturn
 
-    return _artwork_grid(
-        "tags", (TAGS / tag), after, sortmode,
-        tag=tag
-    )
+    return _artwork_grid("tags", (TAGS / tag), after, sortmode, tag=tag)
 
 
 # Users routes
