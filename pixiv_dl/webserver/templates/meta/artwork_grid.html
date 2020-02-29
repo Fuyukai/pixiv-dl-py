@@ -32,14 +32,17 @@
 
 {% set current_page = (after // 25) %}
 {% set max_page = (total_count // 25) %}
+{% set is_first_page = current_page == 0 %}
+{% set is_last_page = current_page >= max_page %}
+
 <section class="section" style="padding: 0">
     <nav class="pagination is-centered">
         <ul class="pagination-list">
+            {% if not is_first_page %}
             <li style="padding-right: 1rem">
                 <a href="{{ prv_url }}" class="pagination-previous">Go back</a>
             </li>
             {# one page before #}
-            {% if current_page != 0 %}
             <li>
                 <a href="{{ page_url(current_page - 1) }}" class="pagination-link">
                     {{ button_text(current_page - 1) }}
@@ -55,17 +58,17 @@
             </li>
 
             {# one page after #}
-            {% if current_page < max_page %}
+            {% if not is_last_page %}
             <li>
                 <a href="{{ page_url(current_page + 1) }}" class="pagination-link">
                     {{ button_text(current_page + 1) }}
                 </a>
             </li>
-            {% endif %}
 
             <li style="padding-left: 1rem">
                 <a href="{{ fwd_url }}" class="pagination-next">Go forwards</a>
             </li>
+            {% endif %}
         </ul>
     </nav>
     <div class="container">
