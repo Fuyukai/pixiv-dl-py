@@ -63,6 +63,7 @@ class TagCard:
 class SortMode(enum.Enum):
     ASCENDING = "ASCENDING"
     DESCENDING = "DESCENDING"
+    RANDOM = "RANDOM"
 
 
 # Common functions
@@ -201,10 +202,22 @@ def bookmarks():
     )
 
 
-def _artwork_grid(name: str, path: Path, after: int, sort_mode: SortMode, **kwargs):
+def _artwork_grid(name: str, path: Path, **kwargs):
     """
     Implements the loading of an artwork grid.
     """
+    try:
+        after = int(request.args.get("after", 0))
+    except ValueError:
+        abort(400)  # type: NoReturn
+        raise Exception
+
+    try:
+        sort_mode = SortMode(request.args.get("sortmode", "DESCENDING").upper())
+    except ValueError:
+        abort(400)  # type: NoReturn
+        raise Exception
+
     after = max(after, 0)
 
     dir = app.config["db_dir"]
@@ -231,34 +244,12 @@ def _artwork_grid(name: str, path: Path, after: int, sort_mode: SortMode, **kwar
 
 @app.route("/pages/bookmarks/public")
 def bookmarks_public():
-    try:
-        after = int(request.args.get("after", 0))
-    except ValueError:
-        abort(400)  # type: NoReturn
-        raise Exception
-
-    try:
-        sortmode = SortMode(request.args.get("sortmode", "DESCENDING").upper())
-    except ValueError:
-        abort(400)  # type: NoReturn
-        raise Exception
-
-    return _artwork_grid("bookmark", BK_PUBLIC, after, sortmode, bookmark_category="public")
+    return _artwork_grid("bookmark", BK_PUBLIC, bookmark_category="public")
 
 
 @app.route("/pages/bookmarks/private")
 def bookmarks_private():
-    try:
-        after = int(request.args.get("after", 0))
-    except ValueError:
-        abort(400)  # type: NoReturn
-
-    try:
-        sortmode = SortMode(request.args.get("sortmode", "DESCENDING").upper())
-    except ValueError:
-        abort(400)  # type: NoReturn
-
-    return _artwork_grid("bookmark", BK_PRIVATE, after, sortmode, bookmark_category="public")
+    return _artwork_grid("bookmark", BK_PRIVATE, bookmark_category="public")
 
 
 # Raw routes
@@ -329,7 +320,7 @@ def tags_named(tag: str):
     except ValueError:
         abort(400)  # type: NoReturn
 
-    return _artwork_grid("tags", (TAGS / tag), after, sortmode, tag=tag)
+    return _artwork_grid("tags", (TAGS / tag), tag=tag)
 
 
 # Users routes
