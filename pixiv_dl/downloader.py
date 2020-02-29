@@ -778,7 +778,7 @@ def main():
     cprint(f"Changing working directory to {output.resolve()}")
     os.chdir(output)
 
-    config = get_config_in(output)
+    config = get_config_in(Path("."))
     defaults = config["defaults"]["downloader"]
 
     public_api = pixivpy3.PixivAPI()
@@ -788,7 +788,7 @@ def main():
     aapi.set_accept_language("en-us")
     cprint("Authenticating with Pixiv...", "cyan")
 
-    token_file = output / "refresh_token"
+    token_file = Path("refresh_token")
     if args.subcommand == "auth":
         aapi.auth(username=args.username, password=args.password)
         token_file.write_text(aapi.refresh_token)
@@ -805,7 +805,7 @@ def main():
     aapi.auth(refresh_token=token_file.read_text())
     cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
 
-    user_info_path = output / "user.json"
+    user_info_path = Path("user.json")
     if not user_info_path.exists():
         detail = aapi.user_detail(aapi.user_id)
         user_info_path.write_text(json.dumps(detail, indent=4))
