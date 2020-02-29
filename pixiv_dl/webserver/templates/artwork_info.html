@@ -44,13 +44,18 @@
                         &nbsp;
                         <span class="artwork-author-name">{{ author_name }}</span>
                         &nbsp;
-                        (<a href="{{ pixiv_author_url() }}">{{ author_id }}</a>)
+                        (<a href="{{ pixiv_author_url() }}" target="_blank"
+                            rel="noopener noreferrer">
+                        {{ author_id }}</a>)
                     </p>
                 </header>
                 <div class="card-content">
                     <p class="title is-8">
                         {{ artwork_title }}&nbsp;
-                        (<a href="{{ pixiv_artwork_url() }}">{{ artwork_id }}</a>)
+                        (<a href="{{ pixiv_artwork_url() }}"
+                            target="_blank"
+                            rel="noopener noreferrer">
+                        {{ artwork_id }}</a>)
                     </p>
                     <p class="subtitle is-4">
                         Bookmarked:
@@ -106,7 +111,8 @@
                         <ul>
                             {% for tag in data["tags"] %}
                             <li>
-                                <a href="{{ tag_url(tag['name']) }}">
+                                <a href="{{ tag_url(tag['name']) }}" target="_blank"
+                                   rel="noopener noreferrer">
                                     {% if tag["translated_name"] != None %}
                                     {{ tag["translated_name"] }} ({{ tag["name"] }})
                                     {% else %}
