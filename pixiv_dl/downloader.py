@@ -3,6 +3,7 @@ Pixiv mass downloading tool.
 """
 import argparse
 import json
+import os
 import textwrap
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -18,6 +19,14 @@ from pixivpy3 import PixivError
 from termcolor import cprint
 
 from pixiv_dl.config import get_config_in
+
+RAW_DIR = Path("./raw")
+BOOKMARKS_DIR = Path("./bookmarks")
+TAGS_DIR = Path("./tags")
+USERS_DIR = Path("./users")
+FOLLOWING_DIR = Path("./following")
+RANKINGS_DIR = Path("./rankings")
+RECOMMENDS_DIR = Path("./recommends")
 
 
 @dataclass
@@ -51,7 +60,6 @@ class Downloader(object):
         self,
         aapi: pixivpy3.AppPixivAPI,
         papi: pixivpy3.PixivAPI,
-        output_dir: Path,
         config,
         *,
         allow_r18: bool = False,
@@ -64,7 +72,6 @@ class Downloader(object):
         """
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
-        :param output_dir: The output directory.
         :param config: The downloader-specific config.
 
         Behaviour params:
@@ -81,7 +88,6 @@ class Downloader(object):
         """
         self.aapi = aapi
         self.papi = papi
-        self.output_dir = output_dir
         self.config = config
 
         self.allow_r18 = allow_r18
@@ -149,7 +155,7 @@ class Downloader(object):
         Downloads a page image.
         """
         for item in items:
-            output_dir = self.output_dir / "raw" / str(item.id)
+            output_dir = RAW_DIR / str(item.id)
             output_dir.mkdir(parents=True, exist_ok=True)
 
             marker = output_dir / "marker.json"
@@ -164,7 +170,7 @@ class Downloader(object):
 
             cprint(f"Successfully downloaded image for {item.id}", "green")
 
-        (self.output_dir / "raw" / str(items[0].id) / "marker.json").write_text(
+        (RAW_DIR / str(items[0].id) / "marker.json").write_text(
             json.dumps({"downloaded": pendulum.now("UTC").isoformat()})
         )
 
@@ -297,9 +303,8 @@ class Downloader(object):
         """
         Does a download with symlinking.
         """
-        raw_dir = self.output_dir / "raw"
         self.download_page(items)
-        self.do_symlinks(raw_dir, dest_dir, items[0].id)
+        self.do_symlinks(RAW_DIR, dest_dir, items[0].id)
 
     def filter_illust(self, illust) -> Tuple[bool, str]:
         """
@@ -372,7 +377,7 @@ class Downloader(object):
                 cprint(f"Filtered illustration {id} ({title}): {msg}", "red")
                 continue
 
-            raw_dir = self.output_dir / "raw"
+            raw_dir = Path("raw")
             self.store_illust_metadata(raw_dir, illust)
             obs = self.make_downloadable(illust)
             to_dl.append(obs)
@@ -392,10 +397,9 @@ class Downloader(object):
         self.should_filter = self.config.get("filter_bookmarks", False)
 
         # set up the output dirs
-        raw = self.output_dir / "raw"
-        raw.mkdir(exist_ok=True)
+        RAW_DIR.mkdir(exist_ok=True)
 
-        bookmark_root_dir = self.output_dir / "bookmarks"
+        bookmark_root_dir = BOOKMARKS_DIR
         bookmark_root_dir.mkdir(exist_ok=True)
 
         for restrict in "private", "public":
@@ -420,11 +424,11 @@ class Downloader(object):
         """
         Mirrors a user.
         """
-        raw = self.output_dir / "raw"
+        raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
         # the images themselves are downloaded to raw/ but we symlink them into the user dir
-        user_dir = self.output_dir / "users" / str(user_id)
+        user_dir = USERS_DIR / str(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
         works_dir = user_dir / "works"
         works_dir.mkdir(parents=True, exist_ok=True)
@@ -488,10 +492,10 @@ class Downloader(object):
 
         :param max_items: The maximum number of items to download.
         """
-        raw = self.output_dir / "raw"
+        raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        follow_dir = self.output_dir / "following"
+        follow_dir = FOLLOWING_DIR
         follow_dir.mkdir(exist_ok=True)
 
         for x in range(0, max_items, 30):
@@ -517,10 +521,10 @@ class Downloader(object):
         """
         Downloads all items for a tag.
         """
-        raw = self.output_dir / "raw"
+        raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        tags_dir = self.output_dir / "tags"
+        tags_dir = TAGS_DIR
         tags_dir.mkdir(exist_ok=True)
 
         # no plural, this is the singular tag
@@ -571,10 +575,10 @@ class Downloader(object):
         """
         cprint(f"Downloading the rankings for mode {mode}", "cyan")
 
-        raw = self.output_dir / "raw"
+        raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        rankings_base = self.output_dir / "rankings"
+        rankings_base = RANKINGS_DIR
         if date is None:
             today = pendulum.now("UTC")
             ranking_fname = mode + "-" + today.format("YYYY-MM-DD")
@@ -597,10 +601,10 @@ class Downloader(object):
         Downloads recommended items.
         """
         cprint("Downloading recommended rankings...", "cyan")
-        raw = self.output_dir / "raw"
+        raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        recommended = self.output_dir / "recommended"
+        recommended = RECOMMENDS_DIR
         recommended.mkdir(exist_ok=True)
 
         method = partial(self.aapi.illust_recommended)
@@ -623,9 +627,9 @@ class Downloader(object):
         """
         Prints the statistics for the local download database.
         """
-        raw_dir = self.output_dir / "raw"
+        raw_dir = RAW_DIR
         if not raw_dir.exists():
-            cprint(f"No database found in {self.output_dir.resolve()}", "red")
+            cprint(f"No database found in {Path('.').resolve()}", "red")
             return
 
         total_objects = 0
@@ -771,6 +775,9 @@ def main():
 
     output = Path(args.db)
     output.mkdir(exist_ok=True)
+    cprint(f"Changing working directory to {output.resolve()}")
+    os.chdir(output)
+
     config = get_config_in(output)
     defaults = config["defaults"]["downloader"]
 
@@ -838,7 +845,6 @@ def main():
     dl = Downloader(
         aapi,
         public_api,
-        output,
         config=config["config"]["downloader"],
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),
