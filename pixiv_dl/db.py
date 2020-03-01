@@ -28,7 +28,9 @@ class DB(object):
 
     def __init__(self, connection_url: str):
         self.engine = create_engine(connection_url, echo=True)
-        self.sessionmaker: Callable[[], Session] = sessionmaker(bind=self.engine, autocommit=False)
+        self.sessionmaker: Callable[[], Session] = sessionmaker(
+            bind=self.engine, autocommit=False, autoflush=False
+        )
 
     @contextmanager
     def session(self) -> ContextManager[Session]:

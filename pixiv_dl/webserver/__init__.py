@@ -22,7 +22,9 @@ from pixiv_dl.webserver.queriers import (
     query_raw_grid,
     query_raw_total,
     query_users_all,
-    query_users_id, query_users_id_total)
+    query_users_id,
+    query_users_id_total,
+)
 from pixiv_dl.webserver.structs import SortMode, ArtworkCard
 
 #: Flask app.
@@ -247,9 +249,11 @@ def tags_named(tag: str):
 def users_id(author_id: int):
     with db.session() as session:
         author = session.query(Author).get(author_id)
-        extended_author = session.query(ExtendedAuthorInfo) \
-            .filter(ExtendedAuthorInfo.author_id == author_id) \
+        extended_author = (
+            session.query(ExtendedAuthorInfo)
+            .filter(ExtendedAuthorInfo.author_id == author_id)
             .first()
+        )
 
     # noinspection PyTypeChecker
     return _artwork_grid(
@@ -257,7 +261,8 @@ def users_id(author_id: int):
         partial(query_users_id, author_id),
         partial(query_users_id_total, author_id),
         author_id=author_id,
-        author=author, extended_author=extended_author
+        author=author,
+        extended_author=extended_author,
     )
 
 

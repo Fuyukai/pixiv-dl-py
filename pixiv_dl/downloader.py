@@ -311,7 +311,13 @@ class Downloader(object):
 
         # step 3: tags
         tags_to_add = []
+        # Sometimes, artworks have the same tag multiple times!!!!!
+        seen_keys = set()
         for tag in illust["tags"]:
+            if tag["name"] in seen_keys:
+                continue
+            seen_keys.add(tag["name"])
+
             arttag = (
                 session.query(ArtworkTag)
                 .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
