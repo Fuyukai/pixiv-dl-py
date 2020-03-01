@@ -79,7 +79,7 @@ class ExtendedAuthorInfo(Base):
 
     id = Column(Integer(), primary_key=True, autoincrement=True)
 
-    author_id = Column(Integer(), ForeignKey(Author.id), nullable=False, unique=True)
+    author_id = Column(Integer(), ForeignKey(Author.id), nullable=False, unique=True, index=True)
     author = relationship(Author, back_populates="extended_data")
 
     # all of these are nullable
@@ -101,7 +101,8 @@ class ArtworkTag(Base):
     # ... but only some tags have a translation
     translated_name = Column(Text(), nullable=True, unique=False, index=True)
 
-    artwork_id = Column(Integer(), ForeignKey("artwork.id"), nullable=False, unique=False)
+    artwork_id = Column(Integer(), ForeignKey("artwork.id"), nullable=False, unique=False,
+                        index=True)
     artwork = relationship("Artwork", back_populates="tags", lazy="joined")
 
     __table_args__ = (UniqueConstraint("name", "artwork_id"),)
@@ -122,7 +123,7 @@ class Artwork(Base):
     uploaded_at = Column(DateTime(), nullable=False, unique=False)
 
     # author data
-    author_id = Column(Integer(), ForeignKey(Author.id), nullable=False, unique=False)
+    author_id = Column(Integer(), ForeignKey(Author.id), nullable=False, unique=False, index=True)
     author = relationship(Author, back_populates="artworks", lazy="joined")
 
     # nsfw data
@@ -158,5 +159,5 @@ class Bookmark(Base):
     id = Column(Integer(), primary_key=True, autoincrement=True)
     type = Column(Text(), unique=False)
 
-    artwork_id = Column(Integer(), ForeignKey(Artwork.id), nullable=False)
+    artwork_id = Column(Integer(), ForeignKey(Artwork.id), nullable=False, index=True)
     artwork = relationship(Artwork, back_populates="bookmark", lazy="joined")
