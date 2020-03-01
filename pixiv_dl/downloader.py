@@ -32,7 +32,6 @@ FOLLOWING_DIR = Path("./following")
 RANKINGS_DIR = Path("./rankings")
 RECOMMENDS_DIR = Path("./recommends")
 
-
 logging.basicConfig()
 
 
@@ -46,6 +45,13 @@ class DownloadableImage:
     page_num: int
     # the image url
     url: str
+
+
+# https://stackoverflow.com/a/312464
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 
 class Downloader(object):
@@ -320,8 +326,8 @@ class Downloader(object):
 
             arttag = (
                 session.query(ArtworkTag)
-                .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
-                .first()
+                    .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
+                    .first()
             )
             if arttag is None:
                 arttag = ArtworkTag()
@@ -396,7 +402,7 @@ class Downloader(object):
                 break
 
             # ratelimit...
-            time.sleep(1.0)
+            time.sleep(2.0)
 
         return to_process
 
@@ -585,9 +591,9 @@ class Downloader(object):
             with ThreadPoolExecutor(4) as e:
                 list(e.map(self.download_page, to_dl))
 
-    def mirror_user(self, user_id: int, *, full: bool = False):
+    def _do_mirror_user_metadata(self, user_id: int, *, full: bool = False):
         """
-        Mirrors a user.
+        Does a user mirror with metadata.
         """
         raw = RAW_DIR
         raw.mkdir(exist_ok=True)
@@ -595,15 +601,14 @@ class Downloader(object):
         cprint(f"Downloading info for user {user_id}...", "cyan")
         user_info = self.aapi.user_detail(user_id)
 
-        # unfortunately, this doesn't give the nice background image...
         cprint(f"Saving profile image...", "cyan")
         self.download_author_pic(user_info["user"])
 
         with self.db.session() as session:
             extended_info = (
                 session.query(ExtendedAuthorInfo)
-                .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
-                .first()
+                    .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
+                    .first()
             )
 
             if extended_info is None:
@@ -626,21 +631,28 @@ class Downloader(object):
             session.add(extended_info)
 
         cprint(
-            f"Downloading all works for user {user_id} || {user_info['user']['name']} "
+            f"Downloading all works info for user {user_id} || {user_info['user']['name']} "
             f"|| {user_info['user']['account']}",
             "cyan",
         )
-
-        # very generic...
         fn = partial(self.aapi.user_illusts, user_id=user_id)
-        to_process_works = self.depaginate_download(fn, param_names=("offset",))
-        to_dl_works = self.process_and_save_illusts(to_process_works)
+        illusts = self.depaginate_download(fn, param_names=("offset",))
+        to_process_works = self.process_and_save_illusts(illusts)
 
         if full:
-            cprint(f"Downloading all bookmarks for user {user_id}", "cyan")
+            cprint(f"Downloading all bookmark info for user {user_id}", "cyan")
             fn2 = partial(self.aapi.user_bookmarks_illust, user_id=user_id)
-            to_process_bookmarks = self.depaginate_download(fn2)
-            to_dl_bookmarks = self.process_and_save_illusts(to_process_bookmarks)
+            to_process_bookmarks = self.process_and_save_illusts(self.depaginate_download(fn2))
+        else:
+            to_process_bookmarks = []
+
+        return to_process_works, to_process_bookmarks
+
+    def mirror_user(self, user_id: int, *, full: bool = False):
+        """
+        Mirrors a user.
+        """
+        to_dl_works, to_dl_bookmarks = self._do_mirror_user_metadata(user_id, full=full)
 
         cprint("Downloading images concurrently...", "magenta")
         with ThreadPoolExecutor(4) as e:
@@ -788,7 +800,40 @@ class Downloader(object):
             # list() call unwraps errors
             return list(e.map(self.download_page, to_dl))
 
-    def print_stats(self):
+    def supercrawl(self):
+        """
+        Performs a Super Crawl - downloading ALL images from ALL following.
+        """
+        cprint("PERFORMING A SUPER CRAWL!", "magenta")
+        cprint("This is going to take a very long time.", "magenta")
+        if input("Are you sure? [y/N] ") != "y":
+            return
+
+        meth = partial(self.aapi.user_following, user_id=self.aapi.user_id)
+        following = self.depaginate_download(
+            meth,
+            param_names=("offset",),
+            key_name="user_previews",
+        )
+
+        def _flatmap_fn(obb):
+            author_id = obb["user"]["id"]
+            author_data, _ = self._do_mirror_user_metadata(author_id)
+            return author_data
+
+        for chunked in chunks(following, 15):
+            to_dl = []
+            for chunk in chunked:
+                to_dl.extend(_flatmap_fn(chunk))
+
+            with ThreadPoolExecutor(4) as e:
+                # list() call unwraps errors
+                list(e.map(self.download_page, to_dl))
+
+            print("GOing back around!")
+
+    @staticmethod
+    def print_stats():
         """
         Prints the statistics for the local download database.
         """
@@ -892,6 +937,9 @@ def main():
 
     # download all bookmarks mode, no arguments
     bookmark_mode = parsers.add_parser("bookmarks", help="Download bookmarks")
+
+    # super crawl mode, no arguments
+    supercrawl = parsers.add_parser("supercrawl", help="Super-crawl mode")
 
     # download all following
     following_mode = parsers.add_parser("following", help="Download all following")
@@ -1032,6 +1080,8 @@ def main():
     if subcommand == "bookmarks":
         cprint("Downloading all bookmarks...", "cyan")
         return dl.download_bookmarks()
+    elif subcommand == "supercrawl":
+        return dl.supercrawl()
     elif subcommand == "following":
         cprint("Downloading your following...", "cyan")
         return dl.download_following(max_items=args.limit)
