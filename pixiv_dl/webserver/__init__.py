@@ -7,14 +7,12 @@ from os import fspath
 from pathlib import Path
 from typing import NoReturn, Callable, List, Any
 
-import pendulum
 from flask import Flask, render_template, request, send_from_directory, safe_join
 from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
 from pixiv_dl.db import DB, Artwork
-#: Flask app.
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
@@ -26,6 +24,7 @@ from pixiv_dl.webserver.queriers import (
 )
 from pixiv_dl.webserver.structs import SortMode, ArtworkCard
 
+#: Flask app.
 app = Flask(__name__)
 app.jinja_env.undefined = StrictUndefined
 
@@ -34,51 +33,6 @@ db: DB
 
 #: Path to raw files.
 RAW = Path("raw")
-
-
-# Common functions
-def count_artworks(path: Path) -> int:
-    """
-    Counts the number of artworks in a specified path.
-
-    :param path: The path to count in.
-    :return: The number of artwork folders.
-    """
-    folders = sum(1 for subdir in path.iterdir() if subdir.name.isdigit())
-    return folders
-
-
-def newest_artwork(path: Path) -> Path:
-    """
-    Gets the newest artwork from a path.
-
-    :param path: The path of the artworks.
-    :return: The Path corresponding to the newest artwork.
-    """
-    folders = sorted([subdir.name for subdir in path.iterdir() if subdir.name.isdigit()])
-    newest = folders[-1]
-    finalpath = path / newest
-    return finalpath
-
-
-def info_from_path(path: Path) -> ArtworkCard:
-    """
-    Gets an ArtworkCard from a resolved path.
-    """
-    meta = json.loads((path / "meta.json").read_text())
-    author = meta["user"]
-
-    tile = ArtworkCard(
-        id=meta["id"],
-        title=meta["title"],
-        author_id=author["id"],
-        author_name=author["name"],
-        description="...",
-        create_date=pendulum.parse(meta["create_date"]),
-        r18=meta["x_restrict"] != 0,
-    )
-
-    return tile
 
 
 # flask setup
@@ -231,7 +185,7 @@ def bookmarks_private():
         "bookmark",
         partial(query_bookmark_grid, "private"),
         partial(query_bookmark_total, "private"),
-        bookmark_category="public",
+        bookmark_category="private",
     )
 
 
@@ -255,14 +209,14 @@ def tags():
     try:
         sortmode = SortMode(request.args.get("sortmode", "DESCENDING").upper())
     except ValueError:
-        sortmode = SortMode.DESCENDING  # type: NoReturn
+        sortmode = SortMode.DESCENDING
 
     # this ain't pretty...
     # if anyone knows a better way to do this, let me know...
     with db.session() as sess:
         cards, total = query_tags_all(sess, after, sortmode)
         return render_template(
-            "tags.html", tags=cards, after=after, sortmode=sortmode, total_count=total
+            "tags.html", tags=cards, after=after, sortmode=sortmode.value.lower(), total_count=total
         )
 
 
