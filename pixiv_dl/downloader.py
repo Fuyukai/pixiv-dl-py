@@ -288,7 +288,9 @@ class Downloader(object):
                 arttag.artwork_id = illust_id
 
             # update translations if needed
-            arttag.translated_name = tag["translated_name"]
+            if tag["translated_name"] is not None:
+                arttag.translated_name = tag["translated_name"]
+
             tags_to_add.append(arttag)
 
         # step 3: add artwork
