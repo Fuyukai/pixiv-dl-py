@@ -5,6 +5,8 @@ import argparse
 import os
 from pathlib import Path
 
+from pixiv_dl.config import get_config_in
+
 loaded = False
 
 
@@ -22,8 +24,12 @@ def main():
     print(f"Running from path {path}, changing working directory")
     os.chdir(path)
 
+    config = get_config_in(Path("."))["config"]
+
     from pixiv_dl.webserver import app
 
+    app.config["db_url"] = config["database_url"]
+    app.config.update(config.get("webserver", {}))
     app.run(port=args.port, debug=True, use_reloader=False)
 
 

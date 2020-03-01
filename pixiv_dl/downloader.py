@@ -3,8 +3,10 @@ Pixiv mass downloading tool.
 """
 import argparse
 import json
+import logging
 import os
 import textwrap
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
@@ -16,9 +18,11 @@ from urllib.parse import urlsplit, parse_qs
 import pendulum
 import pixivpy3
 from pixivpy3 import PixivError
+from sqlalchemy.orm import Session
 from termcolor import cprint
 
 from pixiv_dl.config import get_config_in
+from pixiv_dl.db import DB, Author, Artwork, Bookmark, ExtendedAuthorInfo, ArtworkTag
 
 RAW_DIR = Path("./raw")
 BOOKMARKS_DIR = Path("./bookmarks")
@@ -27,6 +31,9 @@ USERS_DIR = Path("./users")
 FOLLOWING_DIR = Path("./following")
 RANKINGS_DIR = Path("./rankings")
 RECOMMENDS_DIR = Path("./recommends")
+
+
+logging.basicConfig()
 
 
 @dataclass
@@ -60,6 +67,7 @@ class Downloader(object):
         self,
         aapi: pixivpy3.AppPixivAPI,
         papi: pixivpy3.PixivAPI,
+        db: DB,
         config,
         *,
         allow_r18: bool = False,
@@ -72,6 +80,7 @@ class Downloader(object):
         """
         :param aapi: The Pixiv app API interface.
         :param papi: The Pixiv Public API interface.
+        :param db: The DB object.
         :param config: The downloader-specific config.
 
         Behaviour params:
@@ -89,6 +98,7 @@ class Downloader(object):
         self.aapi = aapi
         self.papi = papi
         self.config = config
+        self.db = db
 
         self.allow_r18 = allow_r18
         self.allow_r18 = allow_r18
@@ -208,7 +218,7 @@ class Downloader(object):
         return obs
 
     @staticmethod
-    def store_illust_metadata(output_dir: Path, illust: dict):
+    def store_illust_metadata(output_dir: Path, illust: dict, session: Session):
         """
         Stores the metadata for a specified illustration.
         """
@@ -225,6 +235,68 @@ class Downloader(object):
 
         # write the raw metadata for later usage, if needed
         (subdir / "meta.json").write_text(json.dumps(illust, indent=4))
+
+        # add objects to database
+        # step 1: artwork
+        artwork = session.query(Artwork).filter(Artwork.id == illust_id).first()
+        if artwork is None:
+            artwork = Artwork()
+            # these never change, so we can trust they won't exist
+            artwork.id = illust_id
+            artwork.title = illust["title"]
+            artwork.caption = illust.get("caption", None)
+            artwork.uploaded_at = pendulum.parse(illust["create_date"])
+
+            artwork.page_count = illust.get("page_count", 1)
+            artwork.single_page = illust.get("page_count", 1) == 1
+
+            artwork.r18 = illust.get("x_restrict") != 0
+            artwork.r18g = illust.get("restrict") != 0
+            artwork.lewd_level = illust.get("sanity_level", 2)
+
+        # these *can* change, so we forcibly update them.
+        artwork.bookmarks = illust.get("total_bookmarks", 0)
+        artwork.views = illust.get("total_views", 0)
+
+        artwork.is_bookmarked = illust.get("is_bookmarked", False)
+
+        # step 2: author
+        author = session.query(Author).filter(Author.id == illust["user"]["id"]).first()
+        if author is None:
+            author = Author()
+            author.id = illust["user"]["id"]
+            author.name = illust["user"]["name"]
+            author.account_name = illust["user"]["account"]
+        else:
+            author.name = illust["user"]["name"]
+
+        session.add(author)
+
+        artwork.author = author
+
+        # step 3: tags
+        tags_to_add = []
+        for tag in illust["tags"]:
+            arttag = (
+                session.query(ArtworkTag)
+                .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
+                .first()
+            )
+            if arttag is None:
+                arttag = ArtworkTag()
+                arttag.name = tag["name"]
+                arttag.artwork_id = illust_id
+
+            # update translations if needed
+            arttag.translated_name = tag["translated_name"]
+            tags_to_add.append(arttag)
+
+        # step 3: add artwork
+        session.add(artwork)
+
+        # step 4: add tags we added
+        for tag in tags_to_add:
+            session.add(tag)
 
     def depaginate_download(
         self,
@@ -275,6 +347,9 @@ class Downloader(object):
             else:
                 # no more bookmarks!
                 break
+
+            # ratelimit...
+            time.sleep(1.0)
 
         return to_process
 
@@ -365,28 +440,31 @@ class Downloader(object):
 
         This takes the list of illustration responses, saves them, and returns a list of
         DownloadableImage to download.
+
+        It also updates the database.
         """
         to_dl = []
 
-        for illust in illusts:
-            id = illust["id"]
-            title = illust["title"]
+        with self.db.session() as session:
+            for illust in illusts:
+                id = illust["id"]
+                title = illust["title"]
 
-            filtered, msg = self.filter_illust(illust)
-            if filtered:
-                cprint(f"Filtered illustration {id} ({title}): {msg}", "red")
-                continue
+                filtered, msg = self.filter_illust(illust)
+                if filtered:
+                    cprint(f"Filtered illustration {id} ({title}): {msg}", "red")
+                    continue
 
-            raw_dir = Path("raw")
-            self.store_illust_metadata(raw_dir, illust)
-            obs = self.make_downloadable(illust)
-            to_dl.append(obs)
+                raw_dir = Path("raw")
+                self.store_illust_metadata(raw_dir, illust, session)
+                obs = self.make_downloadable(illust)
+                to_dl.append(obs)
 
-            cprint(
-                f"Processed metadata for {illust['id']} ({illust['title']}) "
-                f"with {len(obs)} pages",
-                "green",
-            )
+                cprint(
+                    f"Processed metadata for {illust['id']} ({illust['title']}) "
+                    f"with {len(obs)} pages",
+                    "green",
+                )
 
         return to_dl
 
@@ -413,12 +491,27 @@ class Downloader(object):
             # downloadable objects, list of lists
             to_dl = self.process_and_save_illusts(to_process)
             cprint(f"Got {len(to_dl)} bookmarks.", "cyan")
+
+            # update bookmarks table
+            with self.db.session() as session:
+                for illust in to_process:
+                    bookmark = (
+                        session.query(Bookmark).filter(Bookmark.artwork_id == illust["id"]).first()
+                    )
+
+                    if bookmark is None:
+                        bookmark = Bookmark()
+
+                    bookmark.type = restrict
+                    bookmark.artwork_id = illust["id"]
+                    session.add(bookmark)
+
             # free memory during the download process, we don't need these anymore
             to_process.clear()
 
             cprint("Downloading images concurrently...", "magenta")
             with ThreadPoolExecutor(4) as e:
-                list(e.map(partial(self.do_download_with_symlinks, bookmark_dir), to_dl))
+                list(e.map(self.download_page, to_dl))
 
     def mirror_user(self, user_id: int, *, full: bool = False):
         """
@@ -449,6 +542,32 @@ class Downloader(object):
         user_info["_meta"] = {"download-date": pendulum.now("UTC").isoformat(), "tool": "pixiv-dl"}
         (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
 
+        with self.db.session() as session:
+            extended_info = (
+                session.query(ExtendedAuthorInfo)
+                .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
+                .first()
+            )
+
+            if extended_info is None:
+                extended_info = ExtendedAuthorInfo()
+                extended_info.twitter_url = user_info["profile"]["twitter_url"]
+                extended_info.comment = user_info["user"]["comment"]
+
+            author_object = (
+                session.query(Author).filter(Author.id == user_info["user"]["id"]).first()
+            )
+
+            if author_object is None:
+                author_object = Author()
+                author_object.id = user_info["user"]["id"]
+                author_object.account_name = user_info["user"]["account"]
+
+            author_object.name = user_info["user"]["name"]
+            session.add(author_object)
+            extended_info.author = author_object
+            session.add(extended_info)
+
         if full:
             cprint(f"Saving following data...", "cyan")
             following = self.depaginate_download(
@@ -477,11 +596,9 @@ class Downloader(object):
 
         cprint("Downloading images concurrently...", "magenta")
         with ThreadPoolExecutor(4) as e:
-            l1 = list(e.map(partial(self.do_download_with_symlinks, works_dir), to_dl_works))
+            l1 = list(e.map(self.download_page, to_dl_works))
             if full:
-                l2 = list(
-                    e.map(partial(self.do_download_with_symlinks, bookmarks_dir), to_dl_bookmarks)
-                )
+                l2 = list(e.map(self.download_page, to_dl_bookmarks))
                 return l1 + l2
             else:
                 return l1
@@ -509,13 +626,14 @@ class Downloader(object):
             if len(to_process) == 0:
                 return
 
+            # no special db access; it's done here.
             to_dl = self.process_and_save_illusts(to_process)
 
             cprint("Downloading images concurrently...", "magenta")
 
             with ThreadPoolExecutor(4) as e:
                 # list() call unwraps errors
-                list(e.map(partial(self.do_download_with_symlinks, follow_dir), to_dl))
+                list(e.map(self.download_page, to_dl))
 
     def download_tag(self, main_tag: str, max_items: int = 500):
         """
@@ -567,7 +685,7 @@ class Downloader(object):
 
             cprint("Downloading images concurrently...", "magenta")
             with ThreadPoolExecutor(4) as e:
-                list(e.map(partial(self.do_download_with_symlinks, tag_dir), to_dl))
+                list(e.map(self.download_page, to_dl))
 
     def download_ranking(self, mode: str, date: str = None):
         """
@@ -585,16 +703,13 @@ class Downloader(object):
         else:
             ranking_fname = mode + "-" + date
 
-        rankings_dir = rankings_base / ranking_fname
-        rankings_dir.mkdir(exist_ok=True, parents=True)
-
         method = partial(self.aapi.illust_ranking, mode=mode, date=date)
         to_process = self.depaginate_download(method, param_names=("offset",))
         to_dl = self.process_and_save_illusts(to_process)
 
         with ThreadPoolExecutor(4) as e:
             # list() call unwraps errors
-            list(e.map(partial(self.do_download_with_symlinks, rankings_dir), to_dl))
+            list(e.map(self.download_page, to_dl))
 
     def download_recommended(self, max_items: int = 500):
         """
@@ -603,9 +718,6 @@ class Downloader(object):
         cprint("Downloading recommended rankings...", "cyan")
         raw = RAW_DIR
         raw.mkdir(exist_ok=True)
-
-        recommended = RECOMMENDS_DIR
-        recommended.mkdir(exist_ok=True)
 
         method = partial(self.aapi.illust_recommended)
         to_process = self.depaginate_download(
@@ -621,7 +733,7 @@ class Downloader(object):
 
         with ThreadPoolExecutor(4) as e:
             # list() call unwraps errors
-            return list(e.map(partial(self.do_download_with_symlinks, recommended), to_dl))
+            return list(e.map(self.download_page, to_dl))
 
     def print_stats(self):
         """
@@ -775,15 +887,21 @@ def main():
 
     output = Path(args.db)
     output.mkdir(exist_ok=True)
-    cprint(f"Changing working directory to {output.resolve()}")
+    cprint(f"Changing working directory to {output.resolve()}", "magenta")
     os.chdir(output)
 
     config = get_config_in(Path("."))
+
+    # set up database
+    db_url = config["config"]["database_url"]
+    db = DB(db_url)
+    db.migrate_database()
+
     defaults = config["defaults"]["downloader"]
 
+    # set up pixiv downloader
     public_api = pixivpy3.PixivAPI()
     public_api.set_accept_language("en-us")
-    # ew
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
     cprint("Authenticating with Pixiv...", "cyan")
@@ -805,12 +923,12 @@ def main():
     aapi.auth(refresh_token=token_file.read_text())
     cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
 
+    public_api.set_auth(aapi.access_token, aapi.refresh_token)
+
     user_info_path = Path("user.json")
     if not user_info_path.exists():
         detail = aapi.user_detail(aapi.user_id)
         user_info_path.write_text(json.dumps(detail, indent=4))
-
-    public_api.set_auth(aapi.access_token, aapi.refresh_token)
 
     # load defaults from the config
     load_default_fields = [
@@ -845,6 +963,7 @@ def main():
     dl = Downloader(
         aapi,
         public_api,
+        db,
         config=config["config"]["downloader"],
         allow_r18=args.allow_r18,
         lewd_limits=(args.min_lewd_level, args.max_lewd_level),

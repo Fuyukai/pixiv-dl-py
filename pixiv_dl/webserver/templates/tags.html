@@ -6,51 +6,58 @@
 <a href="{{ url_for('tags_named', tag=name) }}">{{ content }}</a>
 {%- endmacro -%}
 
-<p class="title has-text-centered">Tag Browser</p>
+<section class="section">
+    <p class="title has-text-centered">Tag Browser</p>
+</section>
 
-<div class="columns is-multiline">
-    {# creates a card corresponding to each tag, and the newest artwork #}
-    {% for tag in tags %}
-    <div class="column is-one-fifth">
-        <div class="card has-equal-height">
-            <div class="card-image">
-                <figure class="image is-square">
-                    <a href="{{ url_for('.artwork_page', artwork_id=tag.artwork.id) }}">
-                        <img src="{{ url_for('.static_image_grid', image_id=tag.artwork.id) }}"
-                             height="250"
-                             width="250"
-                             class="grid-image {% if tag.artwork.r18 %}r18{% endif %}"
-                        />
-                    </a>
+<section class="section" id="pagination">
+{% import "meta/pagination.html" as paginator %}
+    {{ paginator.paginator(after, total_count, sortmode) }}
+</section>
 
-                </figure>
-            </div>
-
-            <div class="card-content">
-                {% if tag.translated_name != None %}
-                <p class="title is-4">
-                    {{ tag_url(tag.name, tag.translated_name.title()) }}
-                </p>
-                <p class="subtitle is-6">
-                    Original name: {{ tag.name }}
-                </p>
-                {% else %}
-                <p class="title is-4">
-                    {{ tag_url(tag.name, tag.name) }}
-                </p>
-                <p class="subtitle is-6">
-                    <em>No translation available.</em>
-                </p>
-                {% endif %}
-
-                <div class="content" style="margin-top: auto">
-                    Artwork count: {{ tag.count }}
+{% import "grids/helpers.html" as helpers %}
+<section class="section">
+    <div class="columns is-multiline">
+        {# creates a card corresponding to each tag, and the newest artwork #}
+        {% for tag in tags %}
+        <div class="column is-one-fifth">
+            <div class="card has-equal-height">
+                <div class="card-image">
+                    {{
+                    helpers.overlay_image(
+                        tag.artwork.id,
+                        tag.artwork.r18,
+                        tag.artwork.page_count
+                    )
+                    }}
                 </div>
 
+                <div class="card-content">
+                    {% if tag.translated_name != None %}
+                    <p class="title is-4">
+                        {{ tag_url(tag.name, tag.translated_name.title()) }}
+                    </p>
+                    <p class="subtitle is-6">
+                        Original name: {{ tag.name }}
+                    </p>
+                    {% else %}
+                    <p class="title is-4">
+                        {{ tag_url(tag.name, tag.name) }}
+                    </p>
+                    <p class="subtitle is-6">
+                        <em>No translation available.</em>
+                    </p>
+                    {% endif %}
+
+                    <div class="content" style="margin-top: auto">
+                        Artwork count: {{ tag.count }}
+                    </div>
+
+                </div>
             </div>
         </div>
-    </div>
-    {% endfor %}
+        {% endfor %}
 
-</div>
+    </div>
+</section>
 {% endblock %}

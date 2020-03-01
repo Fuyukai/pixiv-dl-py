@@ -6,7 +6,12 @@ from pathlib import Path
 
 import tomlkit
 
-default_config = """# Default values to load so you don't have to constantly re-define them.
+default_config = """
+[config]
+## The database URL. If a SQLite DB, will use a path relative to the output directory.
+database_url = sqlite:///pixivdl.db
+
+# Default values to load so you don't have to constantly re-define them.
 # Uncomment any of these to apply them.
 # Note that none of the commented out entries are the real "default" values if they don't exist -
 # they're just there as examples.
@@ -51,7 +56,3 @@ def get_config_in(dir: Path):
         file.write_text(default_config)
 
     return tomlkit.parse(file.read_text())
-
-
-if __name__ == "__main__":
-    main()

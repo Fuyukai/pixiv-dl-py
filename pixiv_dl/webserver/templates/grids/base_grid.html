@@ -1,0 +1,46 @@
+{% extends "meta/base.html" %}
+{# Artwork grid page #}
+
+{% block content %}
+<section class="section">
+    {% block grid_header %}
+    {% endblock %}
+</section>
+
+{# pagination #}
+<section class="section">
+{% import "meta/pagination.html" as paginator %}
+{{ paginator.paginator(after, total_count, sortmode) }}
+</section>
+
+{# the grid itself #}
+{% import "grids/helpers.html" as helpers %}
+<section class="section">
+    <div class="columns is-multiline">
+
+        {# these are all ArtworkCard objects #}
+        {% for artwork in artworks %}
+        <div class="column is-one-fifth">
+            <div class="card has-equal-height">
+                <div class="card-image">
+                    {{ helpers.overlay_image(artwork.id, artwork.r18, artwork.page_count) }}
+                </div>
+
+                <div class="card-content">
+                    <p class="title is-4">
+                        <a href="{{ url_for('.artwork_page', artwork_id=artwork.id) }}">
+                            <abbr title="{{ artwork.id }}">{{ artwork.title }}</abbr>
+                        </a>
+                    </p>
+                    <p class="subtitle is-6">by {{ artwork.author_name }}</p>
+
+                    <!--div class="content">
+                        {{ artwork.description }}
+                    </div-->
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

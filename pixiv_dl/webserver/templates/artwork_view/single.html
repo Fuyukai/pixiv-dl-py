@@ -1,0 +1,28 @@
+{% extends "meta/base.html" %}
+{# Singular artwork page #}
+
+{% block content %}
+{% import "artwork_view/artwork_base.html" as base %}
+
+<div class="container">
+    <div class="columns" style="padding-top: 2em">
+        <div class="column is-three-fifths">
+            <figure class="image">
+                <img src="{{ base.static_image_url(data.id) }}"
+                     style="object-fit: contain"
+                     class="artwork-view-image"
+                >
+            </figure>
+        </div>
+        <div class="column is-two-fifths">
+            {{ base.author_card(data) }}
+            <br/>
+            {{ base.caption_card(data) }}
+            <br/>
+            {{ base.stats_card(data) }}
+            <br/>
+            {{ base.tags_card(data) }}
+        </div>
+    </div>
+    </div>
+{% endblock %}

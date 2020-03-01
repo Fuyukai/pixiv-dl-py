@@ -1,0 +1,47 @@
+{% extends "meta/base.html" %}
+{# Multiple pages artwork view. #}
+
+{% block content %}
+{% import "artwork_view/artwork_base.html" as base %}
+
+
+{# info cards #}
+<section class="section">
+    <div class="columns">
+        <div class="column is-one-quarter">
+            {{ base.author_card(data, horizontal=True) }}
+        </div>
+        <div class="column is-one-quarter">
+            {{ base.caption_card(data, horizontal=True) }}
+        </div>
+        <div class="column is-one-quarter">
+            {{ base.stats_card(data, horizontal=True) }}
+        </div>
+        <div class="column is-one-quarter">
+            {{ base.tags_card(data, horizontal=True) }}
+        </div>
+    </div>
+</section>
+{# images #}
+<section class="section">
+    <div class="container">
+        <div class="columns is-multiline">
+            {% for page in range(0, data.page_count) %}
+            <div class="column is-one-third">
+                <figure class="image">
+                    <img src="{{ base.static_image_url(data.id, page) }}"
+                         style="object-fit: contain"
+                         class="artwork-view-image"
+                    >
+                    <span class="is-overlay">
+                        <span class="is-multiple-pages">
+                            {{ page + 1 }} / {{ data.page_count }}
+                        </span>
+                    </span>
+                </figure>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}
