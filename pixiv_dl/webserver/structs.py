@@ -45,7 +45,7 @@ class ArtworkCard:
             author_name=artwork.author.name,
             r18=artwork.r18 or artwork.r18g,
             create_date=pendulum.instance(artwork.uploaded_at),
-            page_count=artwork.page_count
+            page_count=artwork.page_count,
         )
 
 
