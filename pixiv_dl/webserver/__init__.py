@@ -246,8 +246,11 @@ def tags_named(tag: str):
             translated_name = tagobb.translated_name
 
     return _artwork_grid(
-        "tags", partial(query_tags_named, tag), partial(query_tags_named_total, tag),
-        tag=tag, translated_name=translated_name
+        "tags",
+        partial(query_tags_named, tag),
+        partial(query_tags_named_total, tag),
+        tag=tag,
+        translated_name=translated_name,
     )
 
 

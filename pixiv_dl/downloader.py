@@ -51,7 +51,7 @@ class DownloadableImage:
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
-        yield lst[i:i + n]
+        yield lst[i : i + n]
 
 
 class Downloader(object):
@@ -326,8 +326,8 @@ class Downloader(object):
 
             arttag = (
                 session.query(ArtworkTag)
-                    .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
-                    .first()
+                .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
+                .first()
             )
             if arttag is None:
                 arttag = ArtworkTag()
@@ -607,8 +607,8 @@ class Downloader(object):
         with self.db.session() as session:
             extended_info = (
                 session.query(ExtendedAuthorInfo)
-                    .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
-                    .first()
+                .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
+                .first()
             )
 
             if extended_info is None:
@@ -811,9 +811,7 @@ class Downloader(object):
 
         meth = partial(self.aapi.user_following, user_id=self.aapi.user_id)
         following = self.depaginate_download(
-            meth,
-            param_names=("offset",),
-            key_name="user_previews",
+            meth, param_names=("offset",), key_name="user_previews",
         )
 
         def _flatmap_fn(obb):

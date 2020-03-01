@@ -101,8 +101,9 @@ class ArtworkTag(Base):
     # ... but only some tags have a translation
     translated_name = Column(Text(), nullable=True, unique=False, index=True)
 
-    artwork_id = Column(Integer(), ForeignKey("artwork.id"), nullable=False, unique=False,
-                        index=True)
+    artwork_id = Column(
+        Integer(), ForeignKey("artwork.id"), nullable=False, unique=False, index=True
+    )
     artwork = relationship("Artwork", back_populates="tags", lazy="joined")
 
     __table_args__ = (UniqueConstraint("name", "artwork_id"),)
