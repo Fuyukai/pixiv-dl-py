@@ -1,5 +1,8 @@
 {% extends "grids/base_grid.html" %}
 
 {% block grid_header %}
-<p class="title has-text-centered">Artwork Tagged As {{ tag }}</p>
+<p class="title has-text-centered is-8">Artwork Tagged As {{ tag }}</p>
+{% if translated_name != None %}
+<p class="subtitle has-text-centered is-4"><em>Translated: {{ translated_name }}</em></p>
+{% endif %}
 {% endblock %}

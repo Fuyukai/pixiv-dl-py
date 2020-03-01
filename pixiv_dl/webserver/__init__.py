@@ -12,7 +12,7 @@ from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
-from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo
+from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
@@ -239,8 +239,15 @@ def tags():
 @app.route("/pages/tags/<tag>")
 def tags_named(tag: str):
     # noinspection PyTypeChecker
+    translated_name = None
+    with db.session() as sess:
+        tagobb: ArtworkTag = sess.query(ArtworkTag).filter(ArtworkTag.name == tag).first()
+        if tagobb is not None:
+            translated_name = tagobb.translated_name
+
     return _artwork_grid(
-        "tags", partial(query_tags_named, tag), partial(query_tags_named_total, tag), tag=tag
+        "tags", partial(query_tags_named, tag), partial(query_tags_named_total, tag),
+        tag=tag, translated_name=translated_name
     )
 
 
