@@ -259,6 +259,9 @@ def tags_named(tag: str):
 def users_id(author_id: int):
     with db.session() as session:
         author = session.query(Author).get(author_id)
+        if author is None:
+            abort(404)
+
         extended_author = (
             session.query(ExtendedAuthorInfo)
             .filter(ExtendedAuthorInfo.author_id == author_id)

@@ -483,7 +483,7 @@ class Downloader(object):
                 msg = f"Illustration doesn't have enough bookmarks ({bookmarks} < {min_bm})"
 
             elif self.max_pages is not None and len(pages) > self.max_pages:
-                msg = f"Illustration has too many pages ({pages} > {self.max_pages})"
+                msg = f"Illustration has too many pages ({len(pages)} > {self.max_pages})"
 
         return msg is not None, msg
 
@@ -535,7 +535,7 @@ class Downloader(object):
                 continue
 
             seen.add(user_id)
-            illusts_to_dl.append(illust)
+            illusts_to_dl.append(illust["user"])
 
         cprint(f"Got {len(illusts_to_dl)} unique authors, out of {len(to_process)}", "cyan")
 
