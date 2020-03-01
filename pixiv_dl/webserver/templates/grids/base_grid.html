@@ -1,6 +1,8 @@
 {% extends "meta/base.html" %}
 {# Artwork grid page #}
 
+{% import "util.jinja2" as util %}
+
 {% block content %}
 <section class="section">
     {% block grid_header %}
@@ -28,11 +30,15 @@
 
                 <div class="card-content">
                     <p class="title is-4">
-                        <a href="{{ url_for('.artwork_page', artwork_id=artwork.id) }}">
+                        <a href="{{ util.pdl_artwork_url(artwork.id) }}">
                             <abbr title="{{ artwork.id }}">{{ artwork.title }}</abbr>
                         </a>
                     </p>
-                    <p class="subtitle is-6">by {{ artwork.author_name }}</p>
+                    <p class="subtitle is-6">by
+                        <a href="{{ util.pdl_author_url(artwork.author_id) }}">
+                            {{ artwork.author_name }}
+                        </a>
+                    </p>
 
                     <!--div class="content">
                         {{ artwork.description }}

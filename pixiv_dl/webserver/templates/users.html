@@ -1,0 +1,53 @@
+{% extends "meta/base.html" %}
+{# Users page template #}
+
+{% import "util.jinja2" as util %}
+
+{% block content %}
+{%- macro user_url(id, content) -%}
+<a href="{{ util.pdl_author_url(id) }}">{{ content }}</a>
+{%- endmacro -%}
+
+<section class="section">
+    <p class="title has-text-centered">User Browser</p>
+</section>
+
+<section class="section" id="pagination">
+    {% import "meta/pagination.html" as paginator %}
+    {{ paginator.paginator(after, total_count, sortmode) }}
+</section>
+
+{% import "grids/helpers.html" as helpers %}
+<section class="section">
+    <div class="columns is-multiline">
+        {# VERY similar to the tags page #}
+        {% for author in authors %}
+        <div class="column is-one-fifth">
+            <div class="card has-equal-height">
+                <div class="card-image">
+                    {{
+                    helpers.overlay_image(
+                        author.artwork.id,
+                        author.artwork.r18,
+                        author.artwork.page_count
+                    )
+                    }}
+                </div>
+
+                <div class="card-content">
+                    <p class="title is-4">
+                        {{ user_url(author.id, author.name) }}
+                    </p>
+
+                    <div class="content" style="margin-top: auto">
+                        Artwork count: {{ author.count }}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+</section>
+{% endblock %}

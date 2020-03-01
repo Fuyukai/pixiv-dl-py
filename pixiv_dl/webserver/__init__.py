@@ -12,7 +12,7 @@ from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
-from pixiv_dl.db import DB, Artwork
+from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
@@ -21,7 +21,8 @@ from pixiv_dl.webserver.queriers import (
     query_tags_named_total,
     query_raw_grid,
     query_raw_total,
-)
+    query_users_all,
+    query_users_id, query_users_id_total)
 from pixiv_dl.webserver.structs import SortMode, ArtworkCard
 
 #: Flask app.
@@ -88,6 +89,21 @@ def static_image_full(image_id: str, page_id: int):
 
     for extension in "jpg", "png":
         filename = f"{image_id}_p{page_id}.{extension}"
+        if not (image_dir / filename).exists():
+            continue
+
+        return send_from_directory(str(image_dir.absolute()), filename)
+
+    abort(404)
+
+
+# static image for profile pics
+@app.route("/db/avatars/<int:user_id>")
+def static_image_avatar(user_id: int):
+    image_dir = Path("profile_pictures")
+
+    for extension in "jpg", "png", "gif":
+        filename = f"{user_id}.{extension}"
         if not (image_dir / filename).exists():
             continue
 
@@ -211,8 +227,6 @@ def tags():
     except ValueError:
         sortmode = SortMode.DESCENDING
 
-    # this ain't pretty...
-    # if anyone knows a better way to do this, let me know...
     with db.session() as sess:
         cards, total = query_tags_all(sess, after, sortmode)
         return render_template(
@@ -229,6 +243,43 @@ def tags_named(tag: str):
 
 
 # Users routes
+@app.route("/pagers/users/<int:author_id>")
+def users_id(author_id: int):
+    with db.session() as session:
+        author = session.query(Author).get(author_id)
+        extended_author = session.query(ExtendedAuthorInfo) \
+            .filter(ExtendedAuthorInfo.author_id == author_id) \
+            .first()
+
+    # noinspection PyTypeChecker
+    return _artwork_grid(
+        "oneuser",
+        partial(query_users_id, author_id),
+        partial(query_users_id_total, author_id),
+        author_id=author_id,
+        author=author, extended_author=extended_author
+    )
+
+
 @app.route("/pages/users")
 def users():
-    abort(404)
+    after = request.args.get("after", 0)
+    try:
+        after = int(after)
+    except ValueError:
+        after = 0
+
+    try:
+        sortmode = SortMode(request.args.get("sortmode", "DESCENDING").upper())
+    except ValueError:
+        sortmode = SortMode.DESCENDING
+
+    with db.session() as sess:
+        cards, total = query_users_all(sess, after, sortmode)
+        return render_template(
+            "users.html",
+            authors=cards,
+            after=after,
+            sortmode=sortmode.value.lower(),
+            total_count=total,
+        )

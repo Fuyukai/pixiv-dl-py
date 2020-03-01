@@ -1,0 +1,47 @@
+{% extends "grids/base_grid.html" %}
+{% import "util.jinja2" as util %}
+
+{%- macro avatar() -%}
+<img src="{{ url_for('static_image_avatar', user_id=author_id) }}" alt="Author's avatar">
+{%- endmacro -%}
+
+{% block grid_header %}
+<hr>
+<div class="container">
+    <!--div class="hero">
+        <div class="hero-body"-->
+    <article class="media">
+        <figure class="media-left">
+            <figure class="image is-128x128">
+                {{ avatar() }}
+            </figure>
+        </figure>
+        <div class="media-content">
+            <div class="content">
+                <strong class="title is-4">{{ author.name }}</strong>&nbsp;
+                <small>{{ author.account_name }}</small>&nbsp;
+                <small>
+                    <a href="{{ pixiv_author_url(author_id) }}">{{ author_id }}</a>
+                </small>
+                <br/>
+                <br/>
+                {% if extended_author == None or extended_author.comment|length == 0 %}
+                <p>Author comment is not available.</p>
+                {% else %}
+                <p>{{ extended_author.comment }}</p>
+                {% endif %}
+
+                {% if extended_author != None %}
+                <br/>
+                <a href="{{ extended_author.twitter_url }}">
+                    <i class="fab fa-twitter"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </article>
+</div>
+<!--/div>
+</div-->
+<hr>
+{% endblock %}

@@ -332,8 +332,12 @@ class Downloader(object):
         session.add(artwork)
 
         # step 4: add tags we added
-        for tag in tags_to_add:
-            session.add(tag)
+        with session.no_autoflush:
+            for tag in tags_to_add:
+                session.add(tag)
+
+        # Flush now, to ensure that the tag state is consistent.
+        session.flush()
 
     def depaginate_download(
         self,

@@ -1,0 +1,15 @@
+{% macro pixiv_author_url(author_id) -%}
+    {{ "https://www.pixiv.net/en/users/" + author_id|string }}
+{%- endmacro -%}
+
+{% macro pixiv_artwork_url(artwork_id) -%}
+    {{ "https://www.pixiv.net/en/artworks/" + artwork_id|string }}
+{%- endmacro -%}
+
+{% macro pdl_author_url(author_id) -%}
+    {{ url_for("users_id", author_id=author_id) }}
+{%- endmacro -%}
+
+{% macro pdl_artwork_url(artwork_id) -%}
+    {{ url_for(".artwork_page", artwork_id=artwork_id) }}
+{%- endmacro -%}

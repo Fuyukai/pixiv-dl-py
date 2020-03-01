@@ -8,13 +8,7 @@
     {{ url_for("tags_named", tag=tag) }}
 {%- endmacro -%}
 
-{% macro pixiv_author_url(author_id) -%}
-    {{ "https://www.pixiv.net/en/users/" + author_id|string }}
-{%- endmacro -%}
-
-{% macro pixiv_artwork_url(artwork_id) -%}
-    {{ "https://www.pixiv.net/en/artworks/" + artwork_id|string }}
-{%- endmacro -%}
+{% import "util.jinja2" as util %}
 
 {% macro author_card(artwork, horizontal=False) %}
 {% set author_name = artwork.author.name %}
@@ -29,9 +23,11 @@
         <p class="card-header-title">
             By
             &nbsp;
-            <span class="artwork-author-name">{{ author_name }}</span>
+            <span class="artwork-author-name">
+                <a href="{{ util.pdl_author_url(author_id) }}">{{ author_name }}</a>
+            </span>
             &nbsp;
-            (<a href="{{ pixiv_author_url(author_id) }}" target="_blank"
+            (<a href="{{ util.pixiv_author_url(author_id) }}" target="_blank"
                 rel="noopener noreferrer">
             {{ author_id }}</a>)
         </p>
@@ -39,7 +35,7 @@
     <div class="card-content">
         <p class="title is-8">
             {{ artwork_title }}
-            <a href="{{ pixiv_artwork_url(artwork_id) }}"
+            <a href="{{ util.pixiv_artwork_url(artwork_id) }}"
                 target="_blank"
                 rel="noopener noreferrer">
             ({{ artwork_id }})</a>

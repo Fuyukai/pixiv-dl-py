@@ -65,6 +65,22 @@ class TagCard:
     translated_name: str = None
 
 
+@dataclass
+class AuthorCard:
+    """
+    Container class for an author card.
+    """
+
+    #: The author ID.
+    id: int
+    #: The author name.
+    name: str
+    #: The number of artworks this author has.
+    count: int
+    #: The artwork card associated with this author.
+    artwork: ArtworkCard
+
+
 class SortMode(enum.Enum):
     ASCENDING = "ASCENDING"
     DESCENDING = "DESCENDING"

@@ -3,8 +3,8 @@ from typing import List
 from sqlalchemy import func
 from sqlalchemy.orm import Session, Query
 
-from pixiv_dl.db import Bookmark, ArtworkTag, Artwork
-from pixiv_dl.webserver.structs import SortMode, ArtworkCard, TagCard
+from pixiv_dl.db import Bookmark, ArtworkTag, Artwork, Author
+from pixiv_dl.webserver.structs import SortMode, ArtworkCard, TagCard, AuthorCard
 
 
 def query_tags_all(session: Session, after: int, sort_mode: SortMode):
@@ -18,6 +18,8 @@ def query_tags_all(session: Session, after: int, sort_mode: SortMode):
     else:
         order = func.count(ArtworkTag.name).desc()
 
+    # this ain't pretty...
+    # if anyone knows a better way to do this, let me know...
     tag_results = (
         session.query(ArtworkTag.name, ArtworkTag.translated_name, func.count(ArtworkTag.name))
         .group_by(ArtworkTag.name)
@@ -67,7 +69,7 @@ def query_tags_named_total(name: str, session: Session):
     """
     Implements the named tag total querier.
     """
-    return session.query(ArtworkTag).filter(ArtworkTag.name == name).count()
+    return session.query(ArtworkTag.name).filter(ArtworkTag.name == name).count()
 
 
 def query_bookmark_grid(
@@ -95,7 +97,7 @@ def query_bookmark_total(type_: str, session: Session):
     """
     Implements the total querying for a bookmark type.
     """
-    return session.query(Bookmark).filter(Bookmark.type == type_).count()
+    return session.query(Bookmark.type).filter(Bookmark.type == type_).count()
 
 
 def query_raw_grid(session: Session, after: int, sort_mode: SortMode):
@@ -121,3 +123,65 @@ def query_raw_total(session: Session):
     Implements raw total querying.
     """
     return session.query(Artwork).count()
+
+
+def query_users_all(session: Session, after: int, sort_mode: SortMode):
+    """
+    Implements all user querying.
+    """
+
+    # This is a crime against databases...
+    total = session.query(Author.id).count()
+    query: Query = session.query(Author.id, Author.name)
+
+    subscalar = (
+        session.query(func.count(Artwork.id)).filter(Artwork.author_id == Author.id).as_scalar()
+    )
+    if sort_mode == SortMode.ASCENDING:
+        query = query.order_by(subscalar.asc())
+    else:
+        query = query.order_by(subscalar.desc())
+
+    query = query.limit(25).offset(after)
+    results = query.all()
+
+    cards = []
+    for (id, name) in results:
+        count = session.query(func.count(Artwork.id)).filter(Artwork.author_id == id).scalar()
+        random_artwork = (
+            session.query(Artwork)
+            .filter(Artwork.author_id == id)
+            .order_by(func.random())
+            .limit(1)
+            .first()
+        )
+
+        artwork_card = ArtworkCard.card_from_artwork(random_artwork)
+        card = AuthorCard(id=id, name=name, count=count, artwork=artwork_card)
+        cards.append(card)
+
+    return cards, total
+
+
+def query_users_id(author_id: int, session: Session, after: int, sort_mode: SortMode):
+    """
+    Implements querying the user page.
+    """
+    query: Query = session.query(Artwork).filter(Artwork.author_id == author_id)
+
+    if sort_mode == SortMode.ASCENDING:
+        query = query.order_by(Artwork.id.asc())
+    else:
+        query = query.order_by(Artwork.id.desc())
+
+    query = query.limit(25).offset(after)
+    results = query.all()
+    tiles = map(ArtworkCard.card_from_artwork, results)
+    return tiles
+
+
+def query_users_id_total(author_id: int, session: Session):
+    """
+    Implements total user page querying.
+    """
+    return session.query(Artwork.author_id).filter(Artwork.author_id == author_id).count()
