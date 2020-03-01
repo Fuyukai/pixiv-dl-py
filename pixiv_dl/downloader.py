@@ -186,6 +186,41 @@ class Downloader(object):
 
         cprint(f"Successfully downloaded {item.id}", "green")
 
+    def download_author_pic(self, user: dict):
+        """
+        Downloads and saves an author's profile picture from a user dict.
+        """
+        user_id = user["id"]
+        pic_urls = list(user["profile_image_urls"].values())
+        if not pic_urls:
+            cprint(f"Skipping {user_id} profile image download", "magenta")
+            return False
+
+        pic_url = pic_urls[0]
+        pic_raw_name = pic_url.split("/")[-1]
+        pic_ext = pic_raw_name.split(".")[-1]
+
+        output_dir = Path("profile_pictures")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        symlink = output_dir / (str(user_id) + "." + pic_ext)
+
+        if (output_dir / pic_raw_name).exists():
+            cprint(f"Skipping {user_id} profile image download as it exists", "magenta")
+            return False
+
+        p = partial(self.aapi.download, url=pic_url, name=pic_raw_name, path=str(output_dir))
+        self.retry_wrapper(p)
+        # symlink to the raw file
+        try:
+            symlink.unlink()
+        except FileNotFoundError:
+            pass
+
+        symlink.symlink_to(pic_raw_name)
+
+        cprint(f"Downloaded {user_id}'s profile picture")
+        return True
+
     @staticmethod
     def make_downloadable(illust: dict) -> List[DownloadableImage]:
         """
@@ -470,6 +505,27 @@ class Downloader(object):
 
         return to_dl
 
+    def save_profile_pics(self, to_process: List[dict]) -> int:
+        """
+        Saves profile pics from an illustration list.
+
+        :return The number of pics saved.
+        """
+        seen = set()
+        illusts_to_dl = []
+        for illust in to_process:
+            user_id = illust["user"]["id"]
+            if user_id in seen:
+                continue
+
+            seen.add(user_id)
+            illusts_to_dl.append(illust)
+
+        cprint(f"Got {len(illusts_to_dl)} unique authors, out of {len(to_process)}", "cyan")
+
+        with ThreadPoolExecutor(8) as e:
+            return sum(list(e.map(self.download_author_pic, illusts_to_dl)))
+
     def download_bookmarks(self):
         """
         Downloads the bookmarks for this user.
@@ -489,6 +545,10 @@ class Downloader(object):
             cprint(f"Downloading bookmark metadata type {restrict}", "magenta")
             fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id, restrict=restrict)
             to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
+
+            cprint("Saving author profile pictures...", "magenta")
+            downloaded = self.save_profile_pics(to_process)
+            cprint(f"Downloaded {downloaded} author avatars.", "cyan")
 
             # downloadable objects, list of lists
             to_dl = self.process_and_save_illusts(to_process)
@@ -522,27 +582,12 @@ class Downloader(object):
         raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        # the images themselves are downloaded to raw/ but we symlink them into the user dir
-        user_dir = USERS_DIR / str(user_id)
-        user_dir.mkdir(parents=True, exist_ok=True)
-        works_dir = user_dir / "works"
-        works_dir.mkdir(parents=True, exist_ok=True)
-        bookmarks_dir = user_dir / "bookmarks"
-        bookmarks_dir.mkdir(parents=True, exist_ok=True)
-
         cprint(f"Downloading info for user {user_id}...", "cyan")
         user_info = self.aapi.user_detail(user_id)
 
         # unfortunately, this doesn't give the nice background image...
-        images = user_info["user"]["profile_image_urls"]
-        url = images["medium"]
-        suffix = url.split(".")[-1]
         cprint(f"Saving profile image...", "cyan")
-        self.aapi.download(url, path=user_dir, name=f"avatar.{suffix}")
-
-        cprint(f"Saving metadata...", "cyan")
-        user_info["_meta"] = {"download-date": pendulum.now("UTC").isoformat(), "tool": "pixiv-dl"}
-        (user_dir / "meta.json").write_text(json.dumps(user_info, indent=4))
+        self.download_author_pic(user_info["user"])
 
         with self.db.session() as session:
             extended_info = (
@@ -569,15 +614,6 @@ class Downloader(object):
             session.add(author_object)
             extended_info.author = author_object
             session.add(extended_info)
-
-        if full:
-            cprint(f"Saving following data...", "cyan")
-            following = self.depaginate_download(
-                partial(self.aapi.user_following, user_id=user_id),
-                param_names=("offset",),
-                key_name="user_previews",
-            )
-            (user_dir / "following.json").write_text(json.dumps(following, indent=4))
 
         cprint(
             f"Downloading all works for user {user_id} || {user_info['user']['name']} "
@@ -624,6 +660,8 @@ class Downloader(object):
             to_process = self.depaginate_download(
                 fn, max_items=30, param_names=("offset",), initial_params=(x,)
             )
+            self.save_profile_pics(to_process)
+
             # no more to DL
             if len(to_process) == 0:
                 return
@@ -662,6 +700,7 @@ class Downloader(object):
             to_process = self.depaginate_download(
                 fn, max_items=30, param_names=("offset",), initial_params=(x,)
             )
+            self.save_profile_pics(to_process)
             # no more to DL
             if len(to_process) == 0:
                 return
@@ -707,6 +746,7 @@ class Downloader(object):
 
         method = partial(self.aapi.illust_ranking, mode=mode, date=date)
         to_process = self.depaginate_download(method, param_names=("offset",))
+        self.save_profile_pics(to_process)
         to_dl = self.process_and_save_illusts(to_process)
 
         with ThreadPoolExecutor(4) as e:
@@ -731,6 +771,7 @@ class Downloader(object):
             ),
             max_items=max_items,
         )
+        self.save_profile_pics(to_process)
         to_dl = self.process_and_save_illusts(to_process)
 
         with ThreadPoolExecutor(4) as e:
