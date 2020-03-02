@@ -97,3 +97,19 @@ span.is-multiple-pages {
     color: #AD1B00;
     font-style: strong;
 }
+
+/* delete button on artwork pages */
+button.delete-button {
+    position: absolute;
+    right: 0;
+
+    background-color: red;
+    border-radius: 5px;
+}
+button.delete-button[disabled] {
+    background-color: red;
+}
+
+button.delete-button > span {
+    color: #ffffff
+}

@@ -2,6 +2,7 @@
 Webserver definition.
 """
 import json
+import shutil
 from functools import partial
 from os import fspath
 from pathlib import Path
@@ -12,7 +13,7 @@ from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
-from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag
+from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag, Bookmark
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
@@ -97,6 +98,32 @@ def static_image_full(image_id: str, page_id: int):
         return send_from_directory(str(image_dir.absolute()), filename)
 
     abort(404)
+
+
+# Delete artwork route
+@app.route("/db/actions/delete/<int:artwork_id>", methods=["DELETE"])
+def db_delete_artwork(artwork_id: int):
+    with db.session() as sess:
+        artwork = sess.query(Artwork).filter(Artwork.id == artwork_id).first()
+        if not artwork:
+            return "Failed", 404
+
+        tags = sess.query(ArtworkTag).filter(ArtworkTag.artwork_id == artwork_id).all()
+        for tag in tags:
+            sess.delete(tag)
+
+        bookmark = sess.query(Bookmark).filter(Bookmark.artwork_id == artwork_id).first()
+        if bookmark is not None:
+            sess.delete(bookmark)
+
+        sess.flush()
+        sess.delete(artwork)
+        sess.flush()
+
+    image_dir = _get_images_path(str(artwork_id))
+    shutil.rmtree(image_dir)
+
+    return "OK", 200
 
 
 # static image for profile pics
@@ -264,8 +291,8 @@ def users_id(author_id: int):
 
         extended_author = (
             session.query(ExtendedAuthorInfo)
-            .filter(ExtendedAuthorInfo.author_id == author_id)
-            .first()
+                .filter(ExtendedAuthorInfo.author_id == author_id)
+                .first()
         )
 
     # noinspection PyTypeChecker

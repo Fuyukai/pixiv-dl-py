@@ -8,6 +8,10 @@
     {{ url_for("tags_named", tag=tag) }}
 {%- endmacro -%}
 
+{% macro delete_url(artwork_id) -%}
+    {{ url_for("db_delete_artwork", artwork_id=artwork_id) }}
+{%- endmacro -%}
+
 {% import "util.jinja2" as util %}
 
 {% macro author_card(artwork, horizontal=False) %}
@@ -30,6 +34,30 @@
             (<a href="{{ util.pixiv_author_url(author_id) }}" target="_blank"
                 rel="noopener noreferrer">
             {{ author_id }}</a>)
+
+            {# initially disabled; js will undisable it #}
+            <button id="delete-button" class="button delete-button" disabled>
+                <span>Delete</span>
+            </button>
+
+            <script>
+                let button = document.getElementById("delete-button");
+                let span = button.children[0];
+                button.disabled = false;
+                button.onclick = () => {
+                    fetch("{{ delete_url(artwork_id) }}", {method: "DELETE"}).then((resp) => {
+                        button.disabled = true;
+                        if (resp.ok) {
+                            span.innerHTML = "Deleted";
+                            window.location.replace(document.referrer);
+                        } else {
+                            span.innerHTML = "Failed";
+                        }
+                    }).error((e) => {
+                        span.innerHTML = "Failed, retry";
+                    });
+                };
+            </script>
         </p>
     </header>
     <div class="card-content">
