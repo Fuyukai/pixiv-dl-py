@@ -30,7 +30,7 @@ def main():
 
     app.config["db_url"] = config["database_url"]
     app.config.update(config.get("webserver", {}))
-    app.run(port=args.port, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=args.port, debug=True, use_reloader=False)
 
 
 if __name__ == "__main__":
