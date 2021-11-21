@@ -20,6 +20,7 @@ import pixivpy3
 from pixivpy3 import PixivError
 from sqlalchemy.orm import Session
 from termcolor import cprint
+import requests
 
 from pixiv_dl.config import get_config_in
 from pixiv_dl.db import DB, Author, Artwork, Bookmark, ExtendedAuthorInfo, ArtworkTag
@@ -402,7 +403,7 @@ class Downloader(object):
                 break
 
             # ratelimit...
-            time.sleep(2.0)
+            time.sleep(1.5)
 
         return to_process
 
@@ -1003,6 +1004,21 @@ def main():
     public_api.set_accept_language("en-us")
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
+
+    class CustomAdapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+           # When urllib3 hand-rolls a SSLContext, it sets 'options |= OP_NO_TICKET'
+           # and CloudFlare really does not like this. We cannot control this behavior
+           # in urllib3, but we can just pass our own standard context instead.
+           import ssl
+           ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+           ctx.load_default_certs()
+           ctx.set_alpn_protocols(["http/1.1"])
+           return super().init_poolmanager(*args, **kwargs, ssl_context=ctx)
+
+    aapi.requests = requests.Session()
+    aapi.requests.mount("https://", CustomAdapter())
+    
     cprint("Authenticating with Pixiv...", "cyan")
 
     token_file = Path("refresh_token")

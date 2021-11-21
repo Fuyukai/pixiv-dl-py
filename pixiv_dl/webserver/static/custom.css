@@ -1,6 +1,6 @@
 /* gotta have a fancy navbar! */
 .navbar {
-    background-color: #FF6B81;
+    background: linear-gradient(90deg, rgba(203,17,224,1) 0%, rgba(255,107,129,1) 100%);;
     border-radius: 5px;
 }
 

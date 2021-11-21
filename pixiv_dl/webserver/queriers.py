@@ -88,7 +88,8 @@ def query_bookmark_grid(
     query = query.limit(25).offset(after)
 
     bookmarks = query.all()
-    tiles = map(lambda bk: ArtworkCard.card_from_artwork(bk.artwork), bookmarks)
+    artworks = [bk.artwork for bk in bookmarks if bk.artwork is not None]
+    tiles = map(lambda art: ArtworkCard.card_from_artwork(art), artworks)
 
     return tiles
 
