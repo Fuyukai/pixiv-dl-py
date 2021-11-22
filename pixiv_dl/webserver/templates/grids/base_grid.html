@@ -10,10 +10,12 @@
 </section>
 
 {# pagination #}
+{% block pagination %}
 <section class="section">
 {% import "meta/pagination.html" as paginator %}
 {{ paginator.paginator(after, total_count, sortmode) }}
 </section>
+{% endblock %}
 
 {# the grid itself #}
 {% import "grids/helpers.html" as helpers %}

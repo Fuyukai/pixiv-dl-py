@@ -89,7 +89,7 @@ def query_bookmark_grid(
 
     bookmarks = query.all()
     artworks = [bk.artwork for bk in bookmarks if bk.artwork is not None]
-    tiles = map(lambda art: ArtworkCard.card_from_artwork(art), artworks)
+    tiles = list(map(lambda art: ArtworkCard.card_from_artwork(art), artworks))
 
     return tiles
 
@@ -186,3 +186,14 @@ def query_users_id_total(author_id: int, session: Session):
     Implements total user page querying.
     """
     return session.query(Artwork.author_id).filter(Artwork.author_id == author_id).count()
+
+
+def query_random(limit: int, session: Session, after: int, sort_mode: SortMode):
+    """
+    Implements querying a random sample of artworks.
+    """
+
+    subquery = session.query(Artwork.id).order_by(func.random()).limit(limit)
+    results = session.query(Artwork).filter(Artwork.id.in_(subquery)).all()
+
+    return list(map(ArtworkCard.card_from_artwork, results))

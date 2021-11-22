@@ -24,7 +24,7 @@ from pixiv_dl.webserver.queriers import (
     query_raw_total,
     query_users_all,
     query_users_id,
-    query_users_id_total,
+    query_users_id_total, query_random,
 )
 from pixiv_dl.webserver.structs import SortMode, ArtworkCard
 
@@ -328,3 +328,10 @@ def users():
             sortmode=sortmode.value.lower(),
             total_count=total,
         )
+
+
+# Random route
+@app.route("/pages/random")
+def random_artworks():
+    count = request.args.get("count", 25)
+    return _artwork_grid("random", partial(query_random, count), lambda sess: count)
