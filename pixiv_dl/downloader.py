@@ -440,7 +440,7 @@ class Downloader(object):
         self.download_page(items)
         self.do_symlinks(RAW_DIR, dest_dir, items[0].id)
 
-    def filter_illust(self, illust) -> Tuple[bool, str]:
+    def filter_illust(self, illust, session: Session) -> Tuple[bool, str]:
         """
         Filters an illustration based on the criteria.
         """
@@ -492,18 +492,17 @@ class Downloader(object):
                 msg = f"Illustration has too many pages ({len(pages)} > {self.max_pages})"
 
             else:
-                with self.db.session() as sess:
-                    blacklist = (
-                        sess.query(Blacklist)
-                        .filter(
-                            (Blacklist.author_id == illust["user"]["id"])
-                            | (Blacklist.artwork_id == illust["id"])
-                            | (Blacklist.tag.in_(tags))
-                        )
-                        .first()
+                blacklist = (
+                    session.query(Blacklist)
+                    .filter(
+                        (Blacklist.author_id == illust["user"]["id"])
+                        | (Blacklist.artwork_id == illust["id"])
+                        | (Blacklist.tag.in_(tags))
                     )
-                    if blacklist is not None:
-                        msg = f"Illustration is blacklisted ({blacklist})"
+                    .first()
+                )
+                if blacklist is not None:
+                    msg = f"Illustration is blacklisted ({blacklist})"
 
         return msg is not None, msg
 
@@ -523,7 +522,7 @@ class Downloader(object):
                 id = illust["id"]
                 title = illust["title"]
 
-                filtered, msg = self.filter_illust(illust)
+                filtered, msg = self.filter_illust(illust, session)
                 if filtered:
                     cprint(f"Filtered illustration {id} ({title}): {msg}", "red")
                     continue
