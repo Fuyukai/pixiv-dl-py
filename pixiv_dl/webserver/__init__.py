@@ -13,7 +13,7 @@ from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
-from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag, Bookmark
+from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag, Bookmark, Blacklist
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
@@ -108,6 +108,9 @@ def db_delete_artwork(artwork_id: int):
         if not artwork:
             return "Failed", 404
 
+        blacklist = Blacklist(artwork_id=artwork_id)
+        sess.add(blacklist)
+
         tags = sess.query(ArtworkTag).filter(ArtworkTag.artwork_id == artwork_id).all()
         for tag in tags:
             sess.delete(tag)
@@ -122,6 +125,21 @@ def db_delete_artwork(artwork_id: int):
 
     image_dir = _get_images_path(str(artwork_id))
     shutil.rmtree(image_dir)
+
+    return "OK", 200
+
+
+@app.route("/db/actions/blacklist/<int:author_id>", methods=["POST"])
+def db_blacklist_user(author_id: int):
+    """
+    Blacklists this user.
+    """
+
+    with db.session() as sess:
+        bl = sess.query(Blacklist).filter(Blacklist.author_id == author_id).first()
+        if bl is None:
+            new_entry = Blacklist(author_id=author_id)
+            sess.add(new_entry)
 
     return "OK", 200
 

@@ -5,6 +5,10 @@
 <img src="{{ url_for('static_image_avatar', user_id=author_id) }}" alt="Author's avatar">
 {%- endmacro -%}
 
+{% macro delete_url(author_id) -%}
+    {{ url_for("db_blacklist_user", author_id=author_id) }}
+{%- endmacro -%}
+
 {% block grid_header %}
 <hr>
 <div class="container">
@@ -22,6 +26,11 @@
                 <small>{{ author.account_name }}</small>&nbsp;
                 <small>
                     <a href="{{ pixiv_author_url(author_id) }}">{{ author_id }}</a>
+                </small>
+                <small>
+                    <button id="blacklist-button" class="button delete-button" disabled>
+                        <span>Blacklist</span>
+                    </button>
                 </small>
                 <br/>
                 <br/>
@@ -44,4 +53,22 @@
 <!--/div>
 </div-->
 <hr>
+
+<script>
+    let button = document.getElementById("blacklist-button");
+    let span = button.children[0];
+    button.disabled = false;
+    button.onclick = () => {
+        fetch("{{ delete_url(author_id) }}", {method: "POST"}).then((resp) => {
+            button.disabled = true;
+            if (resp.ok) {
+                span.innerHTML = "Blacklisted";
+            } else {
+                span.innerHTML = "Failed";
+            }
+        }).error((e) => {
+            span.innerHTML = "Failed, retry";
+        });
+    };
+</script>
 {% endblock %}

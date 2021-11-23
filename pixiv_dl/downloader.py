@@ -12,18 +12,18 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from pprint import pprint
-from typing import List, Set, Any, Tuple, Iterable
+from typing import List, Set, Any, Tuple, Iterable, Optional
 from urllib.parse import urlsplit, parse_qs
 
 import pendulum
 import pixivpy3
+import requests
 from pixivpy3 import PixivError
 from sqlalchemy.orm import Session
 from termcolor import cprint
-import requests
 
 from pixiv_dl.config import get_config_in
-from pixiv_dl.db import DB, Author, Artwork, Bookmark, ExtendedAuthorInfo, ArtworkTag
+from pixiv_dl.db import DB, Author, Artwork, Bookmark, ExtendedAuthorInfo, ArtworkTag, Blacklist
 
 RAW_DIR = Path("./raw")
 BOOKMARKS_DIR = Path("./bookmarks")
@@ -52,7 +52,7 @@ class DownloadableImage:
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
-        yield lst[i : i + n]
+        yield lst[i: i + n]
 
 
 class Downloader(object):
@@ -73,7 +73,6 @@ class Downloader(object):
     def __init__(
         self,
         aapi: pixivpy3.AppPixivAPI,
-        papi: pixivpy3.PixivAPI,
         db: DB,
         config,
         *,
@@ -103,7 +102,6 @@ class Downloader(object):
             tagged items.
         """
         self.aapi = aapi
-        self.papi = papi
         self.config = config
         self.db = db
 
@@ -160,7 +158,6 @@ class Downloader(object):
                     raise Exception("Unknown error")
                 # re-auths with the refresh token and retries
                 self.aapi.auth()
-                self.papi.set_auth(self.aapi.access_token, self.aapi.refresh_token)
                 continue
             else:
                 return res
@@ -327,8 +324,8 @@ class Downloader(object):
 
             arttag = (
                 session.query(ArtworkTag)
-                .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
-                .first()
+                    .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
+                    .first()
             )
             if arttag is None:
                 arttag = ArtworkTag()
@@ -486,6 +483,19 @@ class Downloader(object):
             elif self.max_pages is not None and len(pages) > self.max_pages:
                 msg = f"Illustration has too many pages ({len(pages)} > {self.max_pages})"
 
+            else:
+                with self.db.session() as sess:
+                    blacklist = (
+                        sess.query(Blacklist)
+                            .filter(
+                            (Blacklist.author_id == illust["user"]["id"]) |
+                            (Blacklist.artwork_id == illust["id"]) |
+                            (Blacklist.tag.in_(tags))
+                        ).first()
+                    )
+                    if blacklist is not None:
+                        msg = f"Illustration is blacklisted ({blacklist})"
+
         return msg is not None, msg
 
     def process_and_save_illusts(self, illusts: List[dict]) -> List[List[DownloadableImage]]:
@@ -608,8 +618,8 @@ class Downloader(object):
         with self.db.session() as session:
             extended_info = (
                 session.query(ExtendedAuthorInfo)
-                .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
-                .first()
+                    .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
+                    .first()
             )
 
             if extended_info is None:
@@ -760,13 +770,6 @@ class Downloader(object):
         raw = RAW_DIR
         raw.mkdir(exist_ok=True)
 
-        rankings_base = RANKINGS_DIR
-        if date is None:
-            today = pendulum.now("UTC")
-            ranking_fname = mode + "-" + today.format("YYYY-MM-DD")
-        else:
-            ranking_fname = mode + "-" + date
-
         method = partial(self.aapi.illust_ranking, mode=mode, date=date)
         to_process = self.depaginate_download(method, param_names=("offset",))
         self.save_profile_pics(to_process)
@@ -800,6 +803,23 @@ class Downloader(object):
         with ThreadPoolExecutor(4) as e:
             # list() call unwraps errors
             return list(e.map(self.download_page, to_dl))
+
+    def blacklist(self, user_id: Optional[int], artwork_id: Optional[int], tag: Optional[str]):
+        """
+        Adds a blacklist entry.
+        """
+
+        if not any((user_id, artwork_id, tag)):
+            cprint("Blacklist requires at least one of (user_id, artwork_id, tag)", "red")
+
+        # extremely terrible gimped usage of sqlite
+        with self.db.session() as sess:
+            row = Blacklist()
+
+            row.artwork_id = artwork_id
+            row.author_id = user_id
+            row.tag = tag
+            sess.add(row)
 
     def supercrawl(self):
         """
@@ -977,6 +997,19 @@ def main():
         "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
 
+    blacklist_mode = parsers.add_parser("blacklist")
+    blacklist_mode.add_argument(
+        "-u", "--user-id", default=None, required=False, help="The user ID to blacklist",
+        type=int
+    )
+    blacklist_mode.add_argument(
+        "-a", "--artwork-id", default=None, required=False, help="The author ID to blacklist",
+        type=int
+    )
+    blacklist_mode.add_argument(
+        "-t", "--tag", default=None, required=False, help="The tag to blacklist"
+    )
+
     auth = parsers.add_parser("auth", help="Generates the refresh token from credentials.")
     auth.add_argument("username", help="Username to log in with")
     auth.add_argument("password", help="Password associated with username")
@@ -1000,25 +1033,23 @@ def main():
     defaults = config["defaults"]["downloader"]
 
     # set up pixiv downloader
-    public_api = pixivpy3.PixivAPI()
-    public_api.set_accept_language("en-us")
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
 
     class CustomAdapter(requests.adapters.HTTPAdapter):
         def init_poolmanager(self, *args, **kwargs):
-           # When urllib3 hand-rolls a SSLContext, it sets 'options |= OP_NO_TICKET'
-           # and CloudFlare really does not like this. We cannot control this behavior
-           # in urllib3, but we can just pass our own standard context instead.
-           import ssl
-           ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-           ctx.load_default_certs()
-           ctx.set_alpn_protocols(["http/1.1"])
-           return super().init_poolmanager(*args, **kwargs, ssl_context=ctx)
+            # When urllib3 hand-rolls a SSLContext, it sets 'options |= OP_NO_TICKET'
+            # and CloudFlare really does not like this. We cannot control this behavior
+            # in urllib3, but we can just pass our own standard context instead.
+            import ssl
+            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ctx.load_default_certs()
+            ctx.set_alpn_protocols(["http/1.1"])
+            return super().init_poolmanager(*args, **kwargs, ssl_context=ctx)
 
     aapi.requests = requests.Session()
     aapi.requests.mount("https://", CustomAdapter())
-    
+
     cprint("Authenticating with Pixiv...", "cyan")
 
     token_file = Path("refresh_token")
@@ -1037,8 +1068,6 @@ def main():
 
     aapi.auth(refresh_token=token_file.read_text())
     cprint(f"Successfully logged in with token as {aapi.user_id}", "magenta")
-
-    public_api.set_auth(aapi.access_token, aapi.refresh_token)
 
     user_info_path = Path("user.json")
     if not user_info_path.exists():
@@ -1077,7 +1106,6 @@ def main():
 
     dl = Downloader(
         aapi,
-        public_api,
         db,
         config=config["config"]["downloader"],
         allow_r18=args.allow_r18,
@@ -1114,6 +1142,8 @@ def main():
     elif subcommand == "recommended":
         cprint("Downloading recommended works...", "cyan")
         return dl.download_recommended(max_items=args.limit)
+    elif subcommand == "blacklist":
+        return dl.blacklist(user_id=args.user_id, artwork_id=args.artwork_id, tag=args.tag)
     elif subcommand == "stats":
         cprint("Providing statistics...", "cyan")
         return dl.print_stats()

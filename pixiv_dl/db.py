@@ -1,6 +1,7 @@
 """
 ORM table definitions.
 """
+import datetime
 from contextlib import contextmanager
 from typing import Callable, ContextManager
 
@@ -12,8 +13,7 @@ from sqlalchemy import (
     Boolean,
     create_engine,
     DateTime,
-    UniqueConstraint,
-)
+    UniqueConstraint, )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, Session
 
@@ -162,3 +162,37 @@ class Bookmark(Base):
 
     artwork_id = Column(Integer(), ForeignKey(Artwork.id), nullable=False, index=True)
     artwork = relationship(Artwork, back_populates="bookmark", lazy="joined")
+
+
+class Blacklist(Base):
+    """
+    Table for blacklisted items.
+    """
+
+    __tablename__ = "blacklist"
+
+    id = Column(Integer(), primary_key=True, autoincrement=True)
+
+    # potential blacklists
+    artwork_id = Column(Integer(), nullable=True, unique=False, index=True)
+    author_id = Column(Integer(), nullable=True, unique=False, index=True)
+    tag = Column(Text(), nullable=True, unique=False, index=True)
+
+    blacklisted_at = Column(DateTime(timezone=True), unique=False, default=datetime.datetime.now)
+
+    def __str__(self):
+        f = "<Blacklist"
+
+        if self.artwork_id is not None:
+            f += f" artwork_id='{self.artwork_id}'"
+
+        if self.author_id is not None:
+            f += f" author_id='{self.author_id}'"
+
+        if self.tag is not None:
+            f += f" tag='{self.tag}'"
+
+        f += ">"
+        return f
+
+    __repr__ = __str__
