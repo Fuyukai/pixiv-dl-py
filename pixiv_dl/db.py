@@ -6,16 +6,17 @@ from contextlib import contextmanager
 from typing import Callable, ContextManager
 
 from sqlalchemy import (
+    Boolean,
     Column,
+    DateTime,
+    ForeignKey,
     Integer,
     Text,
-    ForeignKey,
-    Boolean,
+    UniqueConstraint,
     create_engine,
-    DateTime,
-    UniqueConstraint, )
+)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, Session
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 #: Declarative base variable.
 Base = declarative_base()

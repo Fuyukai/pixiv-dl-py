@@ -7,7 +7,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, List, Generator, Tuple, Optional
+from typing import Any, Generator, List, Optional, Tuple
 
 from termcolor import cprint
 

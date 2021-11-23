@@ -6,27 +6,36 @@ import shutil
 from functools import partial
 from os import fspath
 from pathlib import Path
-from typing import NoReturn, Callable, List, Any
+from typing import Any, Callable, List, NoReturn
 
-from flask import Flask, render_template, request, send_from_directory, safe_join
+from flask import Flask, render_template, request, safe_join, send_from_directory
 from jinja2 import StrictUndefined
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import abort
 
-from pixiv_dl.db import DB, Artwork, Author, ExtendedAuthorInfo, ArtworkTag, Bookmark, Blacklist
+from pixiv_dl.db import (
+    DB,
+    Artwork,
+    ArtworkTag,
+    Author,
+    Blacklist,
+    Bookmark,
+    ExtendedAuthorInfo,
+)
 from pixiv_dl.webserver.queriers import (
     query_bookmark_grid,
     query_bookmark_total,
+    query_random,
+    query_raw_grid,
+    query_raw_total,
     query_tags_all,
     query_tags_named,
     query_tags_named_total,
-    query_raw_grid,
-    query_raw_total,
     query_users_all,
     query_users_id,
-    query_users_id_total, query_random,
+    query_users_id_total,
 )
-from pixiv_dl.webserver.structs import SortMode, ArtworkCard
+from pixiv_dl.webserver.structs import ArtworkCard, SortMode
 
 #: Flask app.
 app = Flask(__name__)
@@ -309,8 +318,8 @@ def users_id(author_id: int):
 
         extended_author = (
             session.query(ExtendedAuthorInfo)
-                .filter(ExtendedAuthorInfo.author_id == author_id)
-                .first()
+            .filter(ExtendedAuthorInfo.author_id == author_id)
+            .first()
         )
 
     # noinspection PyTypeChecker

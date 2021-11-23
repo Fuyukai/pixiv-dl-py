@@ -1,10 +1,10 @@
 from typing import List
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm import Query, Session
 
-from pixiv_dl.db import Bookmark, ArtworkTag, Artwork, Author
-from pixiv_dl.webserver.structs import SortMode, ArtworkCard, TagCard, AuthorCard
+from pixiv_dl.db import Artwork, ArtworkTag, Author, Bookmark
+from pixiv_dl.webserver.structs import ArtworkCard, AuthorCard, SortMode, TagCard
 
 
 def query_tags_all(session: Session, after: int, sort_mode: SortMode):

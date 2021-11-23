@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from pprint import pprint
-from typing import List, Set, Any, Tuple, Iterable, Optional
-from urllib.parse import urlsplit, parse_qs
+from typing import Any, Iterable, List, Optional, Set, Tuple
+from urllib.parse import parse_qs, urlsplit
 
 import pendulum
 import pixivpy3
@@ -23,7 +23,15 @@ from sqlalchemy.orm import Session
 from termcolor import cprint
 
 from pixiv_dl.config import get_config_in
-from pixiv_dl.db import DB, Author, Artwork, Bookmark, ExtendedAuthorInfo, ArtworkTag, Blacklist
+from pixiv_dl.db import (
+    DB,
+    Artwork,
+    ArtworkTag,
+    Author,
+    Blacklist,
+    Bookmark,
+    ExtendedAuthorInfo,
+)
 
 RAW_DIR = Path("./raw")
 BOOKMARKS_DIR = Path("./bookmarks")
@@ -52,7 +60,7 @@ class DownloadableImage:
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
-        yield lst[i: i + n]
+        yield lst[i : i + n]
 
 
 class Downloader(object):
@@ -324,8 +332,8 @@ class Downloader(object):
 
             arttag = (
                 session.query(ArtworkTag)
-                    .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
-                    .first()
+                .filter((ArtworkTag.artwork_id == illust_id) & (ArtworkTag.name == tag["name"]))
+                .first()
             )
             if arttag is None:
                 arttag = ArtworkTag()
@@ -487,11 +495,12 @@ class Downloader(object):
                 with self.db.session() as sess:
                     blacklist = (
                         sess.query(Blacklist)
-                            .filter(
-                            (Blacklist.author_id == illust["user"]["id"]) |
-                            (Blacklist.artwork_id == illust["id"]) |
-                            (Blacklist.tag.in_(tags))
-                        ).first()
+                        .filter(
+                            (Blacklist.author_id == illust["user"]["id"])
+                            | (Blacklist.artwork_id == illust["id"])
+                            | (Blacklist.tag.in_(tags))
+                        )
+                        .first()
                     )
                     if blacklist is not None:
                         msg = f"Illustration is blacklisted ({blacklist})"
@@ -618,8 +627,8 @@ class Downloader(object):
         with self.db.session() as session:
             extended_info = (
                 session.query(ExtendedAuthorInfo)
-                    .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
-                    .first()
+                .filter(ExtendedAuthorInfo.author_id == user_info["user"]["id"])
+                .first()
             )
 
             if extended_info is None:
@@ -832,7 +841,9 @@ class Downloader(object):
 
         meth = partial(self.aapi.user_following, user_id=self.aapi.user_id)
         following = self.depaginate_download(
-            meth, param_names=("offset",), key_name="user_previews",
+            meth,
+            param_names=("offset",),
+            key_name="user_previews",
         )
 
         def _flatmap_fn(obb):
@@ -999,12 +1010,15 @@ def main():
 
     blacklist_mode = parsers.add_parser("blacklist")
     blacklist_mode.add_argument(
-        "-u", "--user-id", default=None, required=False, help="The user ID to blacklist",
-        type=int
+        "-u", "--user-id", default=None, required=False, help="The user ID to blacklist", type=int
     )
     blacklist_mode.add_argument(
-        "-a", "--artwork-id", default=None, required=False, help="The author ID to blacklist",
-        type=int
+        "-a",
+        "--artwork-id",
+        default=None,
+        required=False,
+        help="The author ID to blacklist",
+        type=int,
     )
     blacklist_mode.add_argument(
         "-t", "--tag", default=None, required=False, help="The tag to blacklist"
@@ -1042,6 +1056,7 @@ def main():
             # and CloudFlare really does not like this. We cannot control this behavior
             # in urllib3, but we can just pass our own standard context instead.
             import ssl
+
             ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ctx.load_default_certs()
             ctx.set_alpn_protocols(["http/1.1"])
