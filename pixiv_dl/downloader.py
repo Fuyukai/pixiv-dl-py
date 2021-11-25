@@ -716,7 +716,13 @@ class Downloader(object):
                 # list() call unwraps errors
                 list(e.map(self.download_page, to_dl))
 
-    def download_tag(self, main_tag: str, max_items: int = 500):
+    def download_tag(
+        self,
+        main_tag: str,
+        max_items: int = 500,
+        before: str = None,
+        after: str = None,
+    ):
         """
         Downloads all items for a tag.
         """
@@ -737,7 +743,7 @@ class Downloader(object):
         for x in range(0, max_items, 30):
             cprint(f"Downloading items {x + 1} - {x + 31}", "cyan")
 
-            fn = partial(self.aapi.search_illust, word=main_tag)
+            fn = partial(self.aapi.search_illust, word=main_tag, start_date=after, end_date=before)
             to_process = self.depaginate_download(
                 fn, max_items=30, param_names=("offset",), initial_params=(x,)
             )
@@ -989,6 +995,9 @@ def main():
     tag_mode.add_argument(
         "-l", "--limit", default=500, help="The maximum number of items to download", type=int
     )
+    tag_mode.add_argument("-s", "--start-date", "--after", help="The start date to download from",
+                          default=None)
+    tag_mode.add_argument("-e", "--end-date", "--before", help="The end date to download from")
 
     ranking_mode = parsers.add_parser("rankings", help="Download works from the rankings")
     ranking_mode.add_argument(
@@ -1149,7 +1158,12 @@ def main():
         return dl.mirror_user(args.userid, full=args.full)
     elif subcommand == "tag":
         cprint("Downloading a tag...", "cyan")
-        return dl.download_tag(args.tag, max_items=args.limit)
+        return dl.download_tag(
+            args.tag,
+            max_items=args.limit,
+            before=args.end_date,
+            after=args.start_date,
+        )
     elif subcommand == "rankings":
         cprint("Downloading rankings...", "cyan")
         return dl.download_ranking(mode=args.mode, date=args.date)
