@@ -17,7 +17,6 @@ from urllib.parse import parse_qs, urlsplit
 
 import pendulum
 import pixivpy3
-import requests
 from pixivpy3 import PixivError
 from sqlalchemy.orm import Session
 from termcolor import cprint
@@ -303,7 +302,7 @@ class Downloader(object):
 
         # these *can* change, so we forcibly update them.
         artwork.bookmarks = illust.get("total_bookmarks", 0)
-        artwork.views = illust.get("total_views", 0)
+        artwork.views = illust.get("total_view", 0)
 
         artwork.is_bookmarked = illust.get("is_bookmarked", False)
 
@@ -357,6 +356,53 @@ class Downloader(object):
         # Flush now, to ensure that the tag state is consistent.
         session.flush()
 
+    def depaginate_generator(
+        self,
+        meth,
+        param_names: Iterable[str] = ("max_bookmark_id",),
+        key_name: str = "illusts",
+        max_items: int = None,
+        initial_params: Iterable[Any] = (),
+    ):
+
+        if isinstance(param_names, str):
+            param_names = (param_names,)
+
+        next_params = initial_params
+        count = 0
+
+        for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
+            if not next_params:
+                cprint("Downloading initial page...", "cyan")
+                response = self.retry_wrapper(meth)
+            else:
+                params = dict(zip(param_names, next_params))
+                fmt_params = " ".join(f"{name}={value}" for (name, value) in params.items())
+
+                cprint(f"Downloading page with params {fmt_params}...", "cyan")
+                p = partial(meth, **params)
+                response = self.retry_wrapper(p)
+
+            obbs = response[key_name]
+            cprint(f"Downloaded {len(obbs)} objects (current tally: {count})", "green")
+            yield obbs
+
+            count += len(obbs)
+
+            if max_items is not None and count >= max_items:
+                break
+
+            next_url = response["next_url"]
+            if next_url is not None:
+                query = parse_qs(urlsplit(next_url).query)
+                next_params = [query[key][0] for key in param_names]
+            else:
+                # no more bookmarks!
+                break
+
+            # ratelimit...
+            time.sleep(1.5)
+
     def depaginate_download(
         self,
         meth,
@@ -374,43 +420,9 @@ class Downloader(object):
         :param initial_params: The initial parameters to provide.
         """
 
-        if isinstance(param_names, str):
-            param_names = (param_names,)
+        gen = self.depaginate_generator(meth, param_names, key_name, max_items, initial_params)
 
-        next_params = initial_params
-        to_process = []
-
-        for x in range(0, 9999):  # reasonable upper bound is 9999, 9999 * 30 is ~300k bookmarks...
-            if not next_params:
-                cprint("Downloading initial page...", "cyan")
-                response = self.retry_wrapper(meth)
-            else:
-                params = dict(zip(param_names, next_params))
-                fmt_params = " ".join(f"{name}={value}" for (name, value) in params.items())
-
-                cprint(f"Downloading page with params {fmt_params}...", "cyan")
-                p = partial(meth, **params)
-                response = self.retry_wrapper(p)
-
-            obbs = response[key_name]
-            cprint(f"Downloaded {len(obbs)} objects (current tally: {len(to_process)})", "green")
-            to_process += obbs
-
-            if max_items is not None and len(to_process) >= max_items:
-                break
-
-            next_url = response["next_url"]
-            if next_url is not None:
-                query = parse_qs(urlsplit(next_url).query)
-                next_params = [query[key][0] for key in param_names]
-            else:
-                # no more bookmarks!
-                break
-
-            # ratelimit...
-            time.sleep(1.5)
-
-        return to_process
+        return [item for sublist in gen for item in sublist]
 
     @staticmethod
     def do_symlinks(raw_dir: Path, dest_dir: Path, illust_id: int):
@@ -579,36 +591,37 @@ class Downloader(object):
 
             cprint(f"Downloading bookmark metadata type {restrict}", "magenta")
             fn = partial(self.aapi.user_bookmarks_illust, self.aapi.user_id, restrict=restrict)
-            to_process = self.depaginate_download(fn, param_names=("max_bookmark_id",))
 
-            cprint("Saving author profile pictures...", "magenta")
-            downloaded = self.save_profile_pics(to_process)
-            cprint(f"Downloaded {downloaded} author avatars.", "cyan")
+            for chunk in self.depaginate_generator(fn, param_names=("max_bookmark_id",)):
+                cprint(f"Got single bookmark chunk of {len(chunk)} bookmarks", "cyan")
 
-            # downloadable objects, list of lists
-            to_dl = self.process_and_save_illusts(to_process)
-            cprint(f"Got {len(to_dl)} bookmarks.", "cyan")
+                cprint("Saving author profile pictures...", "magenta")
+                downloaded = self.save_profile_pics(chunk)
+                cprint(f"Downloaded {downloaded} author avatars.", "cyan")
 
-            # update bookmarks table
-            with self.db.session() as session:
-                for illust in to_process:
-                    bookmark = (
-                        session.query(Bookmark).filter(Bookmark.artwork_id == illust["id"]).first()
-                    )
+                # downloadable objects, list of lists
+                to_dl = self.process_and_save_illusts(chunk)
+                cprint(f"Got {len(to_dl)} bookmarks.", "cyan")
 
-                    if bookmark is None:
-                        bookmark = Bookmark()
+                # update bookmarks table
+                with self.db.session() as session:
+                    for illust in chunk:
+                        bookmark = (
+                            session.query(Bookmark)
+                                .filter(Bookmark.artwork_id == illust["id"])
+                                .first()
+                        )
 
-                    bookmark.type = restrict
-                    bookmark.artwork_id = illust["id"]
-                    session.add(bookmark)
+                        if bookmark is None:
+                            bookmark = Bookmark()
 
-            # free memory during the download process, we don't need these anymore
-            to_process.clear()
+                        bookmark.type = restrict
+                        bookmark.artwork_id = illust["id"]
+                        session.add(bookmark)
 
-            cprint("Downloading images concurrently...", "magenta")
-            with ThreadPoolExecutor(4) as e:
-                list(e.map(self.download_page, to_dl))
+                cprint("Downloading images concurrently...", "magenta")
+                with ThreadPoolExecutor(4) as e:
+                    list(e.map(self.download_page, to_dl))
 
     def _do_mirror_user_metadata(self, user_id: int, *, full: bool = False):
         """
@@ -1057,21 +1070,7 @@ def main():
     # set up pixiv downloader
     aapi = pixivpy3.AppPixivAPI()
     aapi.set_accept_language("en-us")
-
-    class CustomAdapter(requests.adapters.HTTPAdapter):
-        def init_poolmanager(self, *args, **kwargs):
-            # When urllib3 hand-rolls a SSLContext, it sets 'options |= OP_NO_TICKET'
-            # and CloudFlare really does not like this. We cannot control this behavior
-            # in urllib3, but we can just pass our own standard context instead.
-            import ssl
-
-            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            ctx.load_default_certs()
-            ctx.set_alpn_protocols(["http/1.1"])
-            return super().init_poolmanager(*args, **kwargs, ssl_context=ctx)
-
-    aapi.requests = requests.Session()
-    aapi.requests.mount("https://", CustomAdapter())
+    # aapi.requests = requests.Session()
 
     cprint("Authenticating with Pixiv...", "cyan")
 
